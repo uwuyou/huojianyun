@@ -1808,7 +1808,7 @@ h1, h2, h3, h4 {
 
 .footer-inner {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
   gap: 3rem;
   margin-bottom: 3rem;
 }
@@ -1851,6 +1851,24 @@ h1, h2, h3, h4 {
 }
 
 .footer-col ul li a:hover { color: #C84545; }
+
+.footer-col ul li a.footer-donate {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(200, 69, 69, 0.6);
+  border-radius: 999px;
+  color: #F5F2EC;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(160, 32, 32, 0.18);
+  transition: background 0.25s, border-color 0.25s;
+}
+.footer-col ul li a.footer-donate:hover {
+  background: #A02020;
+  border-color: #A02020;
+  color: #fff;
+}
 
 .footer-bottom {
   border-top: 1px solid rgba(245, 242, 236, 0.1);
@@ -3165,6 +3183,12 @@ h1, h2, h3, h4 {
         <ul>
           <li><a href="https://www.xiaohongshu.com/user/profile/60b34d4f000000000101eff2" target="_blank" rel="noopener">小红书</a></li>
           <li><a href="https://www.douyin.com/user/self?from_tab_name=main&showTab=like" target="_blank" rel="noopener">抖音</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Support</h4>
+        <ul>
+          <li><a href="https://www.ifdian.net/a/zgzwxahz" target="_blank" rel="noopener" class="footer-donate">☕ 赞赏 / 赞助</a></li>
         </ul>
       </div>
     </div>
