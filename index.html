@@ -4158,18 +4158,22 @@ async function loadArchivedHistory() {
     const resp = await fetch(ARCHIVED_HISTORY_URL, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    if (!Array.isArray(data) || data.length === 0) {
-      console.warn('[归档] history_trajectories.json 为空，沿用内置示例历史任务');
+    // 兼容两种结构：裸数组 [t1, t2, ...] 或对象 {fetched_at, records:[...]}
+    const arr = Array.isArray(data)
+      ? data
+      : (data && Array.isArray(data.records) ? data.records : null);
+    if (!arr || arr.length === 0) {
+      console.warn('[归档] history.json 为空，沿用内置示例历史任务');
       return;
     }
     // 补充 diffDays 字段（发射时间距今的天数）
-    data.forEach(t => {
+    arr.forEach(t => {
       t.diffDays = (new Date(t.launchTime).getTime() - NOW_TS) / 86400000;
     });
     // 原地替换 historicalTrajectories（const 数组：清空后填充，保持引用不变）
     historicalTrajectories.length = 0;
-    historicalTrajectories.push(...data);
-    console.log(`[归档] 已加载 ${data.length} 个真实历史发射任务`);
+    historicalTrajectories.push(...arr);
+    console.log(`[归档] 已加载 ${arr.length} 个真实历史发射任务`);
     // 若正处于历史模式，立即刷新地图图层与列表
     if (currentMissionMode === 'history') {
       applyHistoryFilter();
