@@ -64,6 +64,43 @@ body.locked > *:not(#gate):not(script) { display: none !important; }
   60%{ transform: translateX(-6px); }
   80%{ transform: translateX(6px); }
 }
+
+/* ============ DATA STAMP (数据更新时间角标) ============ */
+.data-stamp {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 14, 12, 0.82);
+  color: #F5F2EC;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(15,14,12,.22);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.data-stamp .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #7ED321; flex: none;
+  box-shadow: 0 0 0 3px rgba(126,211,33,.22);
+  animation: stampPulse 2s ease-in-out infinite;
+}
+.data-stamp.stale .dot { background: #F5A623; box-shadow: 0 0 0 3px rgba(245,166,35,.22); }
+.data-stamp.error .dot { background: #E74C3C; box-shadow: 0 0 0 3px rgba(231,76,60,.22); }
+.data-stamp .stamp-text { white-space: nowrap; }
+.data-stamp .stamp-text b { color: #fff; font-weight: 600; }
+@keyframes stampPulse {
+  0%,100%{ opacity: 1; }
+  50%{ opacity: .45; }
+}
 </style>
 
 <style>
@@ -5353,6 +5390,44 @@ window.addEventListener('scroll', () => {
 });
 </script>
 
-
+<!-- ============================================
+     DATA STAMP (数据更新时间角标)
+     ============================================ -->
+<div id="dataStamp" class="data-stamp" style="display:none">
+  <span class="dot"></span>
+  <span class="stamp-text" id="stampText">数据更新时间 <b>--:--</b></span>
+</div>
+<script>
+(function(){
+  var stamp = document.getElementById('dataStamp');
+  var text = document.getElementById('stampText');
+  function pad(n){ return String(n).padStart(2, '0'); }
+  function fmt(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function setState(cls, html){
+    stamp.className = 'data-stamp' + (cls ? ' ' + cls : '');
+    text.innerHTML = html;
+    stamp.style.display = 'flex';
+  }
+  fetch('https://uwuyou.github.io/huojianyun-data/data/status.json', { cache: 'no-store' })
+    .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(s){
+      if (!s || !s.last_success) throw new Error('无时间戳');
+      var t = new Date(s.last_success);
+      var ageMin = (Date.now() - t.getTime()) / 60000;
+      var cls = ageMin > 180 ? 'stale' : '';
+      var src = s.source ? s.source.replace(' NOTAM', '') : '';
+      var extra = (s.upcoming_count != null ? ' · 即将 ' + s.upcoming_count : '');
+      setState(cls, '数据更新 <b>' + fmt(s.last_success) + '</b>' + (src ? ' · ' + src : '') + extra);
+      if (cls) text.innerHTML += ' · 已延迟';
+    })
+    .catch(function(){
+      setState('error', '数据更新 <b>获取失败</b>');
+    });
+})();
+</script>
 
 </body></html>
