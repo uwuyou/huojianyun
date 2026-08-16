@@ -14,6 +14,96 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
+/* ============ ACCESS GATE ============ */
+body.locked > *:not(#gate):not(script) { display: none !important; }
+#gate {
+  position: fixed; inset: 0; z-index: 100000;
+  display: flex; align-items: center; justify-content: center;
+  background: #F5F2EC;
+  transition: opacity .4s ease, visibility .4s ease;
+}
+#gate.gate-hide { opacity: 0; visibility: hidden; }
+.gate-card {
+  width: min(420px, 90vw);
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(15,14,12,.12);
+}
+.gate-badge {
+  display: inline-block; font-family: var(--font-mono);
+  font-size: .68rem; letter-spacing: .25em;
+  color: #A02020; border: 1px solid #A02020;
+  padding: .3rem .9rem; border-radius: 999px; margin-bottom: 1.4rem;
+}
+.gate-title { font-size: 2.4rem; font-weight: 300; margin-bottom: .6rem; }
+.gate-title em { font-style: italic; color: #A02020; }
+.gate-sub { color: var(--muted); font-size: .9rem; line-height: 1.7; margin-bottom: 2rem; }
+.gate-form { display: flex; gap: .6rem; }
+.gate-form input {
+  flex: 1; padding: .85rem 1rem; font-size: 1rem;
+  border: 1px solid var(--line-strong); border-radius: 12px;
+  background: var(--bg); color: var(--fg); outline: none;
+  font-family: var(--font-body);
+}
+.gate-form input:focus { border-color: #A02020; box-shadow: 0 0 0 3px rgba(160,32,32,.12); }
+.gate-form button {
+  padding: .85rem 1.4rem; font-size: 1rem; font-weight: 600;
+  background: #A02020; color: #fff; border-radius: 12px;
+  transition: background .2s ease;
+}
+.gate-form button:hover { background: #C84545; }
+.gate-msg { color: #A02020; font-size: .82rem; margin-top: 1rem; min-height: 1.2em; }
+#gate.shake { animation: gateShake .4s ease; }
+@keyframes gateShake {
+  0%,100%{ transform: translateX(0); }
+  20%{ transform: translateX(-10px); }
+  40%{ transform: translateX(10px); }
+  60%{ transform: translateX(-6px); }
+  80%{ transform: translateX(6px); }
+}
+
+/* ============ DATA STAMP (数据更新时间角标) ============ */
+.data-stamp {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 14, 12, 0.82);
+  color: #F5F2EC;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 20px rgba(15,14,12,.22);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.data-stamp .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #7ED321; flex: none;
+  box-shadow: 0 0 0 3px rgba(126,211,33,.22);
+  animation: stampPulse 2s ease-in-out infinite;
+}
+.data-stamp.stale .dot { background: #F5A623; box-shadow: 0 0 0 3px rgba(245,166,35,.22); }
+.data-stamp.error .dot { background: #E74C3C; box-shadow: 0 0 0 3px rgba(231,76,60,.22); }
+.data-stamp .stamp-text { white-space: nowrap; }
+.data-stamp .stamp-text b { color: #fff; font-weight: 600; }
+@keyframes stampPulse {
+  0%,100%{ opacity: 1; }
+  50%{ opacity: .45; }
+}
+</style>
+
+<style>
 /* ============================================
    DESIGN TOKENS
    ============================================ */
@@ -1718,7 +1808,7 @@ h1, h2, h3, h4 {
 
 .footer-inner {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: 3rem;
   margin-bottom: 3rem;
 }
@@ -1761,6 +1851,38 @@ h1, h2, h3, h4 {
 }
 
 .footer-col ul li a:hover { color: #C84545; }
+
+/* ============ DONATE FAB (赞赏悬浮按钮) ============ */
+.donate-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: #A02020;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 26px rgba(160, 32, 32, 0.35);
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.donate-fab:hover {
+  transform: translateY(-2px);
+  background: #C84545;
+  color: #fff;
+  box-shadow: 0 14px 32px rgba(160, 32, 32, 0.48);
+}
+.donate-fab .fab-emoji { font-size: 1.1rem; line-height: 1; }
+@media (max-width: 600px) {
+  .donate-fab { padding: 11px 15px; font-size: 0.85rem; }
+}
 
 .footer-bottom {
   border-top: 1px solid rgba(245, 242, 236, 0.1);
@@ -2119,10 +2241,104 @@ h1, h2, h3, h4 {
   .types-grid { grid-template-columns: 1fr; }
   .params-table { font-size: 0.78rem; }
 }
-</style>
-<style>.trae-browser-inspect-overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:999997;pointer-events:auto;background:rgba(0,0,0,0)}.trae-browser-inspect-highlight-box{position:absolute;top:0;left:0;z-index:999998;display:none}.trae-browser-inspect-highlight-tag{position:absolute;left:0px;top:0px;height:18px;padding:0 6px;box-sizing:border-box;border-radius:4px;background-color:var(--vscode-icube-colorSuccessHover, "#2FB287");color:var(--vscode-icube-colorSnow, "#fff");font-size:12px;font-weight:400;display:none;align-items:center;z-index:999999}.trae-browser-inspect-highlight-box-show{display:flex}.trae-browser-inspect-select-button.trae-browser-inspect-highlight-box-show{display:flex !important}.trae-browser-inspect-select-button{position:absolute;top:0;left:0;background-color:var(--vscode-icube--bg-bg-base-secondary, "#222427");color:var(--vscode-icube--text-text-default-active, "#F5F9FE");font-size:11px;font-weight:500;border:1px solid var(--vscode-icube--border-neutral-l1, "#E0E2F217");border-radius:6px;padding:0 8px;height:32px;display:none;align-items:center;cursor:pointer;z-index:999999;gap:4px}.trae-browser-inspect-select-button svg,.trae-browser-inspect-select-button span{z-index:1}.trae-browser-inspect-select-highlight-box{background:rgba(0,0,0,0) !important}.trae-browser-inspect-select-highlight-box .trae-browser-inspect-highlight-tag{background-color:var(--vscode-icube--status-success-active, "#1E8B56")}.trae-browser-inspect-comment-card-container{position:fixed;top:0;left:0;z-index:9999999;pointer-events:auto}.trae-browser-inspect-comment-card-container .trae-browser-inspect-comment-card{display:flex;padding-top:0px !important;align-items:center;z-index:9999999 !important;background-color:var(--vscode-icube--bg-bg-menu)}*[contenteditable]{outline:none}.trae-browser-inspect-click-effect{position:fixed;width:40px;height:40px;margin-left:-20px;margin-top:-20px;border-radius:50%;background-color:var(--vscode-icube-colorSuccessHover, #2FB287);pointer-events:none;animation:trae-browser-inspect-ripple 500ms ease-out forwards;z-index:999999}@keyframes trae-browser-inspect-ripple{0%{transform:scale(0.3);opacity:.8}100%{transform:scale(2);opacity:0}}.trae-browser-inspect-ref-box{position:absolute;border:2px solid var(--vscode-icube-colorSuccessHover, "#2FB287");pointer-events:none;z-index:999998;animation:trae-browser-inspect-fadeInOut 2s ease-in-out forwards}.trae-browser-inspect-ref-label{position:absolute;top:-14px;left:0;height:14px;padding:0 4px;box-sizing:border-box;border-radius:2px;background-color:var(--vscode-icube-colorSuccessHover, "#2FB287");color:var(--vscode-icube-colorSnow, "#fff");font-size:9px;font-weight:500;display:flex;align-items:center;white-space:nowrap;z-index:999999}@keyframes trae-browser-inspect-fadeInOut{0%{opacity:0}10%{opacity:1}90%{opacity:1}100%{opacity:0}}.trae-browser-inspect-input-highlight{position:absolute;border:2px solid var(--vscode-icube-colorSuccessHover, "#2FB287");border-radius:4px;pointer-events:none;z-index:999998;box-shadow:0 0 8px var(--vscode-icube-colorSuccessHover, "#2FB287");animation:trae-browser-inspect-input-pulse 600ms ease-out forwards}@keyframes trae-browser-inspect-input-pulse{0%{opacity:0;box-shadow:0 0 0 var(--vscode-icube-colorSuccessHover, "#2FB287")}30%{opacity:1;box-shadow:0 0 12px var(--vscode-icube-colorSuccessHover, "#2FB287")}100%{opacity:0;box-shadow:0 0 0 var(--vscode-icube-colorSuccessHover, "#2FB287")}}.trae-browser-inspect-virtual-cursor{position:fixed;width:20px;height:20px;pointer-events:none;z-index:9999999;opacity:0;transition:opacity .2s ease}.trae-browser-inspect-virtual-cursor.trae-browser-inspect-cursor-visible{opacity:1}.trae-browser-inspect-virtual-cursor.trae-browser-inspect-cursor-idle{animation:trae-browser-inspect-cursor-breathe 2s ease-in-out infinite}.trae-browser-inspect-virtual-cursor svg{width:20px;height:20px;filter:drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))}@keyframes trae-browser-inspect-cursor-breathe{0%,100%{opacity:.7}50%{opacity:1}}.trae-browser-inspect-scroll-indicator{position:fixed;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:8px;background-color:rgba(0,0,0,.7);color:#fff;font-size:13px;font-weight:500;pointer-events:none;z-index:999999;animation:trae-browser-inspect-indicator-fade 800ms ease-out forwards;backdrop-filter:blur(4px)}.trae-browser-inspect-scroll-indicator svg{width:16px;height:16px;fill:#fff}.trae-browser-inspect-scroll-indicator.trae-scroll-up{top:12px;left:50%;transform:translateX(-50%)}.trae-browser-inspect-scroll-indicator.trae-scroll-down{bottom:12px;left:50%;transform:translateX(-50%)}.trae-browser-inspect-scroll-indicator.trae-scroll-left{left:12px;top:50%;transform:translateY(-50%)}.trae-browser-inspect-scroll-indicator.trae-scroll-right{right:12px;top:50%;transform:translateY(-50%)}@keyframes trae-browser-inspect-indicator-fade{0%{opacity:0;transform:translateX(-50%) scale(0.9)}15%{opacity:1;transform:translateX(-50%) scale(1)}85%{opacity:1}100%{opacity:0}}.trae-browser-inspect-scroll-indicator.trae-scroll-left,.trae-browser-inspect-scroll-indicator.trae-scroll-right{animation-name:trae-browser-inspect-indicator-fade-y}@keyframes trae-browser-inspect-indicator-fade-y{0%{opacity:0;transform:translateY(-50%) scale(0.9)}15%{opacity:1;transform:translateY(-50%) scale(1)}85%{opacity:1}100%{opacity:0}}.trae-browser-inspect-key-badge{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:8px;background-color:rgba(0,0,0,.8);color:#fff;font-size:18px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,monospace;pointer-events:none;z-index:999999;animation:trae-browser-inspect-key-pop 500ms ease-out forwards;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.15);box-shadow:0 4px 12px rgba(0,0,0,.3);letter-spacing:1px}@keyframes trae-browser-inspect-key-pop{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(0.9)}20%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-10px)}}.trae-browser-inspect-step-badge{position:fixed;top:12px;left:12px;padding:6px 12px;border-radius:6px;background-color:var(--vscode-icube-colorSuccessHover, #2FB287);color:#fff;font-size:12px;font-weight:600;pointer-events:none;z-index:999999;animation:trae-browser-inspect-step-slide 600ms ease-out forwards;box-shadow:0 2px 8px rgba(47,178,135,.3);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.trae-browser-inspect-step-badge.trae-step-old{opacity:.4;transform:translateY(0)}@keyframes trae-browser-inspect-step-slide{0%{opacity:0;transform:translateX(-20px)}20%{opacity:1;transform:translateX(0)}100%{opacity:1;transform:translateX(0)}}.trae-browser-inspect-drag-trail{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:999998}.trae-browser-inspect-drag-trail svg{width:100%;height:100%}.trae-browser-inspect-drag-trail .trae-drag-path{fill:none;stroke:var(--vscode-icube-colorSuccessHover, #2FB287);stroke-width:2;stroke-dasharray:8 4;opacity:.6;animation:trae-browser-inspect-dash 600ms linear forwards}.trae-browser-inspect-drag-trail .trae-drag-dot{fill:var(--vscode-icube-colorSuccessHover, #2FB287);filter:drop-shadow(0 0 4px rgba(47, 178, 135, 0.6))}.trae-browser-inspect-drag-trail .trae-drag-endpoint{fill:none;stroke:var(--vscode-icube-colorSuccessHover, #2FB287);stroke-width:2;opacity:.5}@keyframes trae-browser-inspect-dash{0%{stroke-dashoffset:200}100%{stroke-dashoffset:0}}.trae-browser-inspect-drag-trail.trae-drag-fade{animation:trae-browser-inspect-trail-fade 400ms ease-out forwards}@keyframes trae-browser-inspect-trail-fade{0%{opacity:1}100%{opacity:0}}</style></head>
 
-<body>
+/* ============ TECH INTERACTIONS (科技感交互) ============ */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0;
+  background: linear-gradient(90deg, #A02020, #C84545 55%, #F5A623);
+  z-index: 10010; pointer-events: none;
+  box-shadow: 0 0 10px rgba(200, 69, 69, 0.55);
+}
+
+.cursor-glow {
+  position: fixed; top: 0; left: 0;
+  width: 440px; height: 440px; border-radius: 50%;
+  pointer-events: none; z-index: 9000; opacity: 0;
+  background: radial-gradient(circle, rgba(160, 32, 32, 0.13) 0%, rgba(160, 32, 32, 0.05) 45%, transparent 72%);
+  will-change: transform;
+  transition: opacity 0.4s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cursor-glow.is-active { opacity: 1; }
+}
+
+.tilt-card {
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+.tilt-card.is-tilting { box-shadow: 0 24px 60px rgba(15, 14, 12, 0.14); }
+
+.magnetic {
+  will-change: transform;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.hero-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+</style>
+</head>
+
+<body class="locked">
+
+<!-- ============================================
+     ACCESS GATE (密码保护)
+     ============================================ -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-badge">PRIVATE</div>
+    <h1 class="gate-title">火箭<em>云</em></h1>
+    <p class="gate-sub">此站点已启用访问密码<br>请输入密码以继续</p>
+    <div class="gate-form">
+      <input id="gatePass" type="password" placeholder="访问密码" autocomplete="current-password">
+      <button id="gateBtn" type="button">进入</button>
+    </div>
+    <p id="gateMsg" class="gate-msg"></p>
+  </div>
+</div>
+<script>
+(function(){
+  var SALT = 'huojianyun-gate-v1';
+  var HASH = 'ad995bb29da68b578689a9b0f1539aa503a7a05bf6760815287b0445caefde2e';
+  var gate = document.getElementById('gate');
+  var input = document.getElementById('gatePass');
+  var btn = document.getElementById('gateBtn');
+  var msg = document.getElementById('gateMsg');
+  function unlock(){
+    try { sessionStorage.setItem('hjqy_gate', '1'); } catch(e) {}
+    document.body.classList.remove('locked');
+    gate.classList.add('gate-hide');
+    setTimeout(function(){ if (gate.parentNode) gate.parentNode.removeChild(gate); }, 400);
+  }
+  function fail(){
+    msg.textContent = '密码错误，请重试';
+    gate.classList.remove('shake');
+    void gate.offsetWidth;
+    gate.classList.add('shake');
+    input.value = '';
+    input.focus();
+  }
+  function sha256Hex(s){
+    var data = new TextEncoder().encode(s);
+    return crypto.subtle.digest('SHA-256', data).then(function(buf){
+      return Array.from(new Uint8Array(buf)).map(function(b){
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+  function check(){
+    var v = input.value.trim();
+    if (!v) return;
+    sha256Hex(SALT + '::' + v).then(function(h){
+      if (h === HASH) { unlock(); } else { fail(); }
+    }).catch(function(){ unlock(); });
+  }
+  var ok = false;
+  try { ok = sessionStorage.getItem('hjqy_gate') === '1'; } catch(e) {}
+  if (ok) { unlock(); return; }
+  btn.addEventListener('click', check);
+  input.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); check(); } });
+})();
+</script>
 
 <!-- ============================================
      NAV
@@ -2678,13 +2894,6 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> 7-14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#2980B9"></span> &gt;14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#9A938A"></span> 已发射</span>
-      <span class="lg-sep"></span>
-      <span class="lg-label">晨昏线</span>
-      <span class="lg-item"><span class="lg-line" style="border-top:2px solid #E67E22"></span> 昼夜分界(0°)</span>
-      <span class="lg-item"><span class="lg-line" style="border-top:2px dashed #A55EEA"></span> -6°</span>
-      <span class="lg-item"><span class="lg-line" style="border-top:2px dashed #7B3FD4"></span> -12°</span>
-      <span class="lg-item"><span class="lg-line" style="border-top:2px dotted #4C2A8A"></span> -18°</span>
-      <span class="lg-note">晨昏线为当前时刻太阳高度角 0°/-6°/-12°/-18° 的等高度线，随太阳位置每 10 分钟更新；火箭云仅在 -18°~0° 的暮光区可见，可据此判断当前中国哪些区域处于可观测窗口</span>
       <span class="lg-note">任务航迹线颜色随发射时间远近变化（红近蓝远，已发射变灰）；拍摄走廊与拍摄距离环仅在晨昏阶段（太阳高度角 -18°~0°）绘制 · 侧边栏可切换「历史任务」验证拍摄位置</span>
       <span class="lg-note" style="color:var(--accent-soft)">实时卫星云图已独立为新板块（见下方），支持卫星影像 / 云层 / 降水 / 风场 / 温度多图层切换；右上角图层面板可叠加 NASA MODIS 卫星影像</span>
     </div>
@@ -3015,6 +3224,13 @@ h1, h2, h3, h4 {
           <li><a href="https://spaceflight-tracker.com" target="_blank" rel="noopener">Spaceflight Tracker</a></li>
           <li><a href="https://spacelaunchschedule.com" target="_blank" rel="noopener">Space Launch Schedule</a></li>
           <li><a href="https://www.sast.spacechina.com" target="_blank" rel="noopener">上海航天技术研究院</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Follow</h4>
+        <ul>
+          <li><a href="https://www.xiaohongshu.com/user/profile/60b34d4f000000000101eff2" target="_blank" rel="noopener">小红书</a></li>
+          <li><a href="https://www.douyin.com/user/self?from_tab_name=main&showTab=like" target="_blank" rel="noopener">抖音</a></li>
         </ul>
       </div>
     </div>
@@ -3522,25 +3738,24 @@ const TWILIGHT_LEVELS = [
 /* 子太阳点：当前太阳直射的经纬度（标准天文近似，精度足够可视化） */
 function subsolarPoint(date) {
   const JD = date.getTime() / 86400000 + 2440587.5;
-  const n = JD - 2451545.0; // 自 J2000.0 起的天数
-  const L = (280.460 + 0.9856474 * n) % 360;          // 太阳平黄经
-  const g = (357.528 + 0.9856003 * n) % 360;          // 平近点角
+  const n = JD - 2451545.0;
+  const L = (280.460 + 0.9856474 * n) % 360;
+  const g = (357.528 + 0.9856003 * n) % 360;
   const lambda = L + 1.915 * Math.sin(g * Math.PI / 180)
-                    + 0.020 * Math.sin(2 * g * Math.PI / 180); // 太阳真黄经
-  const eps = 23.439 - 0.0000004 * n;                 // 黄赤交角
+                    + 0.020 * Math.sin(2 * g * Math.PI / 180);
+  const eps = 23.439 - 0.0000004 * n;
   const decl = Math.asin(Math.sin(eps * Math.PI / 180)
-               * Math.sin(lambda * Math.PI / 180)) * 180 / Math.PI; // 赤纬
+               * Math.sin(lambda * Math.PI / 180)) * 180 / Math.PI;
   const ra = Math.atan2(Math.cos(eps * Math.PI / 180) * Math.sin(lambda * Math.PI / 180),
-                        Math.cos(lambda * Math.PI / 180)) * 180 / Math.PI; // 赤经
-  const gmst = normDeg(280.46061837 + 360.98564736629 * n); // 格林尼治平恒星时
+                        Math.cos(lambda * Math.PI / 180)) * 180 / Math.PI;
+  const gmst = normDeg(280.46061837 + 360.98564736629 * n);
   return { lat: decl, lon: normDeg(ra - gmst) };
 }
 
 function normDeg(x) { while (x > 180) x -= 360; while (x < -180) x += 360; return x; }
 
-/* 生成太阳高度角为 alt 的等高度线（球面小圆采样点） */
 function twilightLatLngs(sLat, sLon, alt, steps) {
-  const zh = 90 - alt; // 天顶距
+  const zh = 90 - alt;
   const cosZ = Math.cos(zh * Math.PI / 180);
   const sinZ = Math.sin(zh * Math.PI / 180);
   const s = [
@@ -3548,7 +3763,6 @@ function twilightLatLngs(sLat, sLon, alt, steps) {
     Math.cos(sLat * Math.PI / 180) * Math.sin(sLon * Math.PI / 180),
     Math.sin(sLat * Math.PI / 180),
   ];
-  // 构造与子太阳点正交的局部基向量 (u, v) 用于参数化小圆
   let u = cross3([0, 0, 1], s);
   if (norm3(u) < 1e-9) u = cross3([1, 0, 0], s);
   u = normV(u);
@@ -3572,7 +3786,6 @@ function cross3(a, b) {
 function norm3(a) { return Math.hypot(a[0], a[1], a[2]); }
 function normV(a) { const m = norm3(a); return [a[0] / m, a[1] / m, a[2] / m]; }
 
-/* 在小圆跨越 ±180° 经线处断开，避免绘图时绕地球 */
 function segmentRing(pts) {
   const segs = [];
   let cur = [pts[0]];
@@ -3589,7 +3802,6 @@ function segmentRing(pts) {
   return segs;
 }
 
-/* 构建晨昏线图层组 */
 function buildTwilightLayer() {
   const sp = subsolarPoint(new Date());
   const group = L.layerGroup();
@@ -3597,11 +3809,8 @@ function buildTwilightLayer() {
     const ring = twilightLatLngs(sp.lat, sp.lon, lv.alt, 360);
     segmentRing(ring).forEach(seg => {
       L.polyline(seg, {
-        color: lv.color,
-        weight: 1.6,
-        opacity: 0.8,
-        dashArray: lv.dash,
-        interactive: false,
+        color: lv.color, weight: 1.6, opacity: 0.8,
+        dashArray: lv.dash, interactive: false,
       }).addTo(group);
     });
   });
@@ -3611,7 +3820,6 @@ function buildTwilightLayer() {
 let twilightLayer = buildTwilightLayer();
 twilightLayer.addTo(map);
 
-/* 每 10 分钟随太阳位置刷新晨昏线 */
 function refreshTwilight() {
   const nl = buildTwilightLayer();
   if (map.hasLayer(twilightLayer)) {
@@ -4058,18 +4266,22 @@ async function loadArchivedHistory() {
     const resp = await fetch(ARCHIVED_HISTORY_URL, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    if (!Array.isArray(data) || data.length === 0) {
-      console.warn('[归档] history_trajectories.json 为空，沿用内置示例历史任务');
+    // 兼容两种结构：裸数组 [t1, t2, ...] 或对象 {fetched_at, records:[...]}
+    const arr = Array.isArray(data)
+      ? data
+      : (data && Array.isArray(data.records) ? data.records : null);
+    if (!arr || arr.length === 0) {
+      console.warn('[归档] history.json 为空，沿用内置示例历史任务');
       return;
     }
     // 补充 diffDays 字段（发射时间距今的天数）
-    data.forEach(t => {
+    arr.forEach(t => {
       t.diffDays = (new Date(t.launchTime).getTime() - NOW_TS) / 86400000;
     });
     // 原地替换 historicalTrajectories（const 数组：清空后填充，保持引用不变）
     historicalTrajectories.length = 0;
-    historicalTrajectories.push(...data);
-    console.log(`[归档] 已加载 ${data.length} 个真实历史发射任务`);
+    historicalTrajectories.push(...arr);
+    console.log(`[归档] 已加载 ${arr.length} 个真实历史发射任务`);
     // 若正处于历史模式，立即刷新地图图层与列表
     if (currentMissionMode === 'history') {
       applyHistoryFilter();
@@ -5363,7 +5575,209 @@ window.addEventListener('scroll', () => {
 });
 </script>
 
+<!-- ============================================
+     DATA STAMP (数据更新时间角标)
+     ============================================ -->
+<div id="dataStamp" class="data-stamp" style="display:none">
+  <span class="dot"></span>
+  <span class="stamp-text" id="stampText">数据更新时间 <b>--:--</b></span>
+</div>
 
+<!-- ============================================
+     DONATE FAB (赞赏悬浮按钮)
+     ============================================ -->
+<a href="https://www.ifdian.net/a/zgzwxahz" target="_blank" rel="noopener" class="donate-fab">
+  <span class="fab-emoji">☕</span> 赞赏 / 赞助
+</a>
+<script>
+(function(){
+  var stamp = document.getElementById('dataStamp');
+  var text = document.getElementById('stampText');
+  function pad(n){ return String(n).padStart(2, '0'); }
+  function fmt(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function setState(cls, html){
+    stamp.className = 'data-stamp' + (cls ? ' ' + cls : '');
+    text.innerHTML = html;
+    stamp.style.display = 'flex';
+  }
+  fetch('https://uwuyou.github.io/huojianyun-data/data/status.json', { cache: 'no-store' })
+    .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(s){
+      if (!s || !s.last_success) throw new Error('无时间戳');
+      var t = new Date(s.last_success);
+      var ageMin = (Date.now() - t.getTime()) / 60000;
+      var cls = ageMin > 180 ? 'stale' : '';
+      var src = s.source ? s.source.replace(' NOTAM', '') : '';
+      var extra = (s.upcoming_count != null ? ' · 即将 ' + s.upcoming_count : '');
+      setState(cls, '数据更新 <b>' + fmt(s.last_success) + '</b>' + (src ? ' · ' + src : '') + extra);
+      if (cls) text.innerHTML += ' · 已延迟';
+    })
+    .catch(function(){
+      setState('error', '数据更新 <b>获取失败</b>');
+    });
+})();
+</script>
 
-<div class="light"><div class="trae-browser-inspect-highlight-tag"></div><div class="trae-browser-inspect-highlight-tag"></div><div class="trae-browser-inspect-highlight-box"></div><div class="trae-browser-inspect-highlight-box trae-browser-inspect-select-highlight-box" style="cursor: grab; pointer-events: auto;"></div><div class="trae-browser-inspect-overlay" style="display: none;"></div><div class="trae-browser-inspect-comment-card-container"></div><div class="trae-browser-inspect-drop-indicator" style="position: fixed; pointer-events: none; z-index: 999999; display: none; background: linear-gradient(90deg, rgb(0, 102, 255), rgb(0, 170, 255)); box-shadow: rgba(0, 102, 255, 0.4) 0px 0px 4px 1px, rgba(0, 102, 255, 0.3) 0px 0px 8px 2px, rgba(0, 102, 255, 0.2) 0px 0px 12px 3px; transition: transform 0.15s, width 0.15s, height 0.15s;"></div></div><div class="trae-browser-inspect-text-selection-container light"><div class="trae-browser-inspect-comment-card-container"></div></div><div class="trae-browser-inspect-operation light"></div>
+<script>
+/* ============================================
+   TECH INTERACTIONS (科技感交互)
+   ============================================ */
+(function(){
+  'use strict';
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var finePointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+  /* 1. 顶部滚动进度条 */
+  var prog = document.createElement('div');
+  prog.className = 'scroll-progress';
+  document.body.appendChild(prog);
+  function updateProgress(){
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    prog.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  window.addEventListener('resize', updateProgress);
+  updateProgress();
+
+  /* 2. 光标光晕（柔光跟随） */
+  if (finePointer && !reduceMotion) {
+    var glow = document.createElement('div');
+    glow.className = 'cursor-glow';
+    document.body.appendChild(glow);
+    var gx = 0, gy = 0, tx = 0, ty = 0, gr = null;
+    document.addEventListener('mousemove', function(e){
+      tx = e.clientX; ty = e.clientY;
+      glow.classList.add('is-active');
+      if (!gr) {
+        gr = requestAnimationFrame(function(){
+          gx += (tx - gx) * 0.18;
+          gy += (ty - gy) * 0.18;
+          glow.style.transform = 'translate(' + (gx - 220) + 'px,' + (gy - 220) + 'px)';
+          gr = null;
+        });
+      }
+    });
+    document.addEventListener('mouseleave', function(){ glow.classList.remove('is-active'); });
+  }
+
+  /* 3. 卡片 3D 倾斜 */
+  if (finePointer && !reduceMotion) {
+    document.querySelectorAll('.type-card, .next-card, .launch-row, .science-visual, .guide-visual, .conditions-card').forEach(function(card){
+      card.classList.add('tilt-card');
+      var raf = null;
+      card.addEventListener('mousemove', function(e){
+        if (raf) return;
+        raf = requestAnimationFrame(function(){
+          var r = card.getBoundingClientRect();
+          var px = (e.clientX - r.left) / r.width - 0.5;
+          var py = (e.clientY - r.top) / r.height - 0.5;
+          card.style.transform = 'perspective(900px) rotateX(' + (-py * 6).toFixed(2) + 'deg) rotateY(' + (px * 8).toFixed(2) + 'deg)';
+          card.classList.add('is-tilting');
+          raf = null;
+        });
+      });
+      card.addEventListener('mouseleave', function(){
+        if (raf) { cancelAnimationFrame(raf); raf = null; }
+        card.style.transform = '';
+        card.classList.remove('is-tilting');
+      });
+    });
+  }
+
+  /* 4. 磁性按钮 */
+  if (finePointer && !reduceMotion) {
+    document.querySelectorAll('.enhance-btn, .donate-fab').forEach(function(btn){
+      btn.classList.add('magnetic');
+      btn.addEventListener('mousemove', function(e){
+        var r = btn.getBoundingClientRect();
+        var dx = e.clientX - (r.left + r.width / 2);
+        var dy = e.clientY - (r.top + r.height / 2);
+        btn.style.transform = 'translate(' + (dx * 0.18).toFixed(1) + 'px,' + (dy * 0.22).toFixed(1) + 'px)';
+      });
+      btn.addEventListener('mouseleave', function(){ btn.style.transform = ''; });
+    });
+  }
+
+  /* 5. Hero 星尘粒子画布 */
+  var hero = document.querySelector('.hero');
+  if (hero && window.HTMLCanvasElement) {
+    var canvas = document.createElement('canvas');
+    canvas.className = 'hero-canvas';
+    hero.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W = 0, H = 0, stars = [];
+    var mx = 0, my = 0, hasMouse = false;
+    var running = false, animId = null;
+
+    function seed(){
+      var count = Math.min(150, Math.round(W * H / 9000));
+      stars = [];
+      for (var i = 0; i < count; i++) {
+        stars.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          r: 0.4 + Math.random() * 1.3,
+          vy: 0.08 + Math.random() * 0.35,
+          vx: (Math.random() - 0.5) * 0.08,
+          tw: Math.random() * Math.PI * 2,
+          depth: 0.015 + Math.random() * 0.05,
+          warm: Math.random() < 0.16
+        });
+      }
+    }
+    function resize(){
+      var r = hero.getBoundingClientRect();
+      W = r.width; H = r.height;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seed();
+    }
+    function draw(){
+      ctx.clearRect(0, 0, W, H);
+      var px = (hasMouse ? mx : W / 2) - W / 2;
+      var py = (hasMouse ? my : H / 2) - H / 2;
+      for (var i = 0; i < stars.length; i++) {
+        var s = stars[i];
+        s.tw += 0.02;
+        s.y -= s.vy;
+        s.x += s.vx;
+        if (s.y < -2) { s.y = H + 2; s.x = Math.random() * W; }
+        if (s.x < -2) s.x = W + 2; else if (s.x > W + 2) s.x = -2;
+        var xx = s.x + px * s.depth;
+        var yy = s.y + py * s.depth;
+        var alpha = 0.25 + Math.abs(Math.sin(s.tw)) * 0.6;
+        ctx.beginPath();
+        ctx.arc(xx, yy, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = s.warm ? 'rgba(200, 90, 90,' + alpha + ')' : 'rgba(245, 242, 236,' + alpha + ')';
+        ctx.fill();
+      }
+    }
+    function loop(){ if (!running) return; draw(); animId = requestAnimationFrame(loop); }
+    function start(){ if (!running) { running = true; loop(); } }
+    function stop(){ running = false; if (animId) { cancelAnimationFrame(animId); animId = null; } }
+
+    if (reduceMotion) { resize(); draw(); }
+    else {
+      var io = new IntersectionObserver(function(entries){
+        if (entries[0].isIntersecting) { resize(); start(); } else { stop(); }
+      }, { threshold: 0 });
+      io.observe(hero);
+      window.addEventListener('resize', function(){ if (running) resize(); });
+      hero.addEventListener('mousemove', function(e){
+        var r = hero.getBoundingClientRect();
+        mx = e.clientX - r.left; my = e.clientY - r.top; hasMouse = true;
+      });
+      hero.addEventListener('mouseleave', function(){ hasMouse = false; });
+    }
+  }
+})();
+</script>
+
 </body></html>
