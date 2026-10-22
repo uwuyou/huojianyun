@@ -314,6 +314,23 @@ h1, h2, h3, h4 {
 .nav-links a:hover { color: var(--accent); }
 .nav-links a:hover::after { width: 100%; }
 
+.nav-links a.nav-globe {
+  color: var(--accent);
+  padding: 0.34rem 0.8rem;
+  border: 1px solid rgba(160, 32, 32, 0.28);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  transition: color 0.25s, background 0.25s, border-color 0.25s;
+}
+.nav-links a.nav-globe::after { display: none; }
+.nav-links a.nav-globe:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
 /* ============================================
    HERO
    ============================================ */
@@ -840,6 +857,79 @@ h1, h2, h3, h4 {
   height: clamp(400px, 65vh, 620px);
 }
 
+/* 观测地图：二维 / 三维视图切换 */
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.map-modes {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.map-modes button {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 1.05rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.map-modes button + button { border-left: 1px solid var(--line-strong); }
+.map-modes button:hover { color: var(--accent); }
+.map-modes button.active { background: var(--accent); color: #F5F2EC; }
+
+.map-toolbar .mode-open {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(160, 32, 32, 0.3);
+  padding-bottom: 2px;
+  transition: border-color 0.2s;
+}
+
+.map-toolbar .mode-open:hover { border-bottom-color: var(--accent); }
+
+.map-view {
+  position: relative;
+  min-height: 400px;
+  height: 100%;
+}
+
+.globe-embed {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #04060a;
+}
+
+.globe-embed iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.map-container.mode-3d {
+  grid-template-columns: 1fr;
+  height: clamp(560px, 80vh, 860px);
+}
+
+.map-container.mode-3d .map-sidebar { display: none; }
+
 #map {
   width: 100%;
   height: 100%;
@@ -1106,6 +1196,65 @@ h1, h2, h3, h4 {
 
 .enhance-btn:hover { background: rgba(160, 32, 32, 0.06); border-color: var(--accent); }
 .enhance-btn:disabled { opacity: 0.5; cursor: wait; }
+.enhance-btn.active { background: rgba(160, 32, 32, 0.12); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* 任务聚焦选择器 */
+.mission-focus-wrap {
+  position: relative;
+}
+.mission-focus-wrap label {
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+#missionFocus {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+#missionFocus:hover,
+#missionFocus:focus { border-color: var(--accent); }
+#missionFocus.focused {
+  border-color: var(--accent);
+  background: rgba(160, 32, 32, 0.06);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.mission-focus-wrap::after {
+  content: '⌄';
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.55rem;
+  pointer-events: none;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.focus-hint {
+  font-size: 0.62rem;
+  color: var(--muted-light);
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+
+/* 凌太阳/月亮投影线 */
+.occ-row { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+.occ-btn { flex: 1; text-align: left; }
+.occ-tag {
+  font-size: 0.6rem; color: #fff; background: rgba(0, 0, 0, 0.6);
+  padding: 1px 5px; border-radius: 4px; white-space: nowrap;
+}
 
 /* 海拔输入 */
 .altitude-input-row {
@@ -2209,6 +2358,11 @@ h1, h2, h3, h4 {
     height: auto;
   }
 
+  .map-container.mode-3d { height: auto; }
+  .map-container.mode-3d .map-view { height: 560px; }
+
+  .map-view { min-height: 320px; height: 420px; }
+
   #map { min-height: 320px; height: 420px; }
 
   .map-sidebar {
@@ -2354,6 +2508,7 @@ h1, h2, h3, h4 {
       <a href="#atlas">观测地图</a>
       <a href="#windy">卫星云图</a>
       <a href="#guide">拍摄指南</a>
+      <a href="globe.html" class="nav-globe">三维地球</a>
     </div>
   </div>
 </nav>
@@ -2898,8 +3053,21 @@ h1, h2, h3, h4 {
       <span class="lg-note" style="color:var(--accent-soft)">实时卫星云图已独立为新板块（见下方），支持卫星影像 / 云层 / 降水 / 风场 / 温度多图层切换；右上角图层面板可叠加 NASA MODIS 卫星影像</span>
     </div>
 
-    <div class="map-container reveal visible">
-      <div id="map"></div>
+    <div class="map-toolbar reveal visible">
+      <div class="map-modes" role="tablist" aria-label="观测地图视图">
+        <button type="button" class="active" data-mapview="2d" role="tab" aria-selected="true">二维地图</button>
+        <button type="button" data-mapview="3d" role="tab" aria-selected="false">三维地球</button>
+      </div>
+      <a class="mode-open" href="globe.html" target="_blank" rel="noopener">全屏打开三维视图 ↗</a>
+    </div>
+
+    <div class="map-container reveal visible" id="atlasMap">
+      <div class="map-view">
+        <div id="map"></div>
+        <div class="globe-embed" id="globeEmbed" hidden>
+          <iframe id="globeFrame" title="火箭云三维发射视图" allow="fullscreen"></iframe>
+        </div>
+      </div>
       <div class="map-sidebar">
         <h4>任务时间线</h4>
         <div class="mission-tabs">
@@ -2984,11 +3152,30 @@ h1, h2, h3, h4 {
     </div>
   </div></div>
         <div class="enhance-title">智能增强</div>
+        <div class="mission-focus-wrap">
+          <label for="missionFocus">聚焦任务</label>
+          <select id="missionFocus">
+            <option value="">全部任务</option>
+          </select>
+          <div class="focus-hint" id="focusHint">聚焦后仅显示该任务航迹/环/走廊</div>
+        </div>
         <div class="enhance-panel">
           <div class="locate-row">
             <button class="enhance-btn" id="locateBtn" style="width:100%;">◎ 定位我的位置</button>
             <div class="locate-hint" id="locateHint">点击定位，自动计算到各发射场的距离与拍摄区</div>
             <div id="locatePanel"></div>
+          </div>
+          <div class="adv-block">
+            <div class="enhance-title" style="margin:0.6rem 0 0.4rem;">高级拍摄辅助</div>
+            <button class="enhance-btn" id="shotWindowBtn">🎯 计算最佳拍摄窗口</button>
+            <button class="enhance-btn" id="heatBtn">🗺 可见性评分热力</button>
+            <button class="enhance-btn" id="aimBtn">🧭 方位实时指向</button>
+            <div class="occ-row">
+              <button class="enhance-btn occ-btn" id="transitBtn">☀🌙 凌日凌月投影线</button>
+            </div>
+            <div class="locate-hint" id="occHint">同时显示飞行路径(红)、凌日机位线(黄)、凌月机位线(蓝)，带内可拍到火箭穿过天体圆面</div>
+            <div class="locate-hint" id="advHint">定位后可计算各任务的最佳拍摄时间、方位角与仰角</div>
+            <div id="shotWindowPanel"></div>
           </div>
           <div class="altitude-input-row">
             <label for="altitudeInput">观测海拔</label>
@@ -4689,12 +4876,18 @@ function drawCorridors(tasks, group) {
 const futureMissionGroup = L.layerGroup().addTo(map);
 const historyMissionGroup = L.layerGroup();
 
-// 渲染一组任务的全部图层
+// 未来 / 历史任务模式、历史筛选与聚焦状态（需在 renderMissionSet 首次调用前声明，避免 TDZ）
+let currentMissionMode = 'future';
+const historyFilter = { site: 'all', twilight: 'all' };
+let focusedMissionId = null;
+
+// 渲染一组任务的全部图层（若 focusedMissionId 有值则只渲染该任务）
 function renderMissionSet(tasks, group) {
   group.clearLayers();
-  drawShootingRings(tasks, group);
-  drawTrajectories(tasks, group);
-  drawCorridors(tasks, group);
+  const visible = focusedMissionId ? tasks.filter(t => t.code === focusedMissionId) : tasks;
+  drawShootingRings(visible, group);
+  drawTrajectories(visible, group);
+  drawCorridors(visible, group);
 }
 
 renderMissionSet(trajectories, futureMissionGroup);
@@ -4723,20 +4916,113 @@ function updateTrajectoriesFromPrediction(data) {
   trajectories.push(...items);
   console.log(`[预测] 已加载 ${items.length} 个未来发射任务航迹线`);
 
-  // 若当前处于未来任务模式，立即刷新地图
+  // 若当前处于未来任务模式，立即刷新地图、侧栏列表与聚焦下拉
   if (currentMissionMode === 'future') {
     renderMissionSet(trajectories, futureMissionGroup);
+    renderFutureList();
+    refreshMissionFocusOptions();
+    const hint = document.getElementById('missionHint');
+    if (hint) {
+      const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
+      const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
+      hint.textContent = focusedMissionId
+        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
+        : `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+    }
   }
 }
 
-// 切换未来 / 历史任务
-let currentMissionMode = 'future';
+// 聚焦/取消聚焦某个任务
+function setMissionFocus(code) {
+  focusedMissionId = code || null;
+  const sel = document.getElementById('missionFocus');
+  const hint = document.getElementById('focusHint');
+  if (sel) {
+    sel.value = code || '';
+    sel.classList.toggle('focused', !!code);
+  }
+  if (hint) {
+    hint.textContent = code
+      ? `聚焦 ${code} · 地图仅显示该任务范围`
+      : '聚焦后仅显示该任务航迹/环/走廊';
+  }
+  // 重绘当前任务组
+  applyCurrentMissionRender();
+  // 聚焦时自动缩放到该任务范围
+  if (code) {
+    const tasks = currentMissionMode === 'future' ? trajectories : filteredHistoryTasks();
+    const t = tasks.find(t => t.code === code);
+    if (t) focusMapToTask(t);
+  }
+  // 同步顶部任务状态提示
+  const mh = document.getElementById('missionHint');
+  if (mh) {
+    const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
+    if (currentMissionMode === 'future') {
+      const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
+      mh.textContent = focusedMissionId
+        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
+        : `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+    } else {
+      const all = filteredHistoryTasks();
+      const tw = all.filter(t => t.twilight).length;
+      mh.textContent = focusedMissionId
+        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${all.length} 个）${altSuffix}`
+        : `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
+    }
+  }
+}
 
-// 历史任务筛选状态
-const historyFilter = { site: 'all', twilight: 'all' };
+// 根据当前模式重绘任务组
+function applyCurrentMissionRender() {
+  const currentGroup = currentMissionMode === 'future' ? futureMissionGroup : historyMissionGroup;
+  const tasks = currentMissionMode === 'future' ? trajectories : filteredHistoryTasks();
+  renderMissionSet(tasks, currentGroup);
+}
 
-// 当前选中的历史任务 code（null = 显示全部）
-let selectedHistoryCode = null;
+// 缩放到单个任务范围（含拍摄环）
+function focusMapToTask(t) {
+  if (!t || !t.path || t.path.length < 2) return;
+  const site = launchSites.find(s => s.name === t.site);
+  const bounds = L.latLngBounds(t.path.map(p => [p[0], p[1]]));
+  if (site && t.twilight) {
+    bounds.extend(offsetPoint(site.coords, 0, VIEW_RADIUS_KM));
+    bounds.extend(offsetPoint(site.coords, 90, VIEW_RADIUS_KM));
+    bounds.extend(offsetPoint(site.coords, 180, VIEW_RADIUS_KM));
+    bounds.extend(offsetPoint(site.coords, 270, VIEW_RADIUS_KM));
+  }
+  map.fitBounds(bounds, { padding: [50, 50], duration: 0.8 });
+}
+
+// 初始化/刷新任务聚焦下拉选项
+function refreshMissionFocusOptions() {
+  const sel = document.getElementById('missionFocus');
+  if (!sel) return;
+  const tasks = currentMissionMode === 'future' ? futureTasksWithin(FUTURE_WINDOW_DAYS) : filteredHistoryTasks();
+  const currentVal = focusedMissionId;
+  sel.innerHTML = '<option value="">全部任务</option>';
+  tasks.forEach(t => {
+    const d = new Date(t.launchTime);
+    const dateStr = `${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`;
+    const opt = document.createElement('option');
+    opt.value = t.code;
+    opt.textContent = `${t.code} · ${dateStr} · ${t.site.split(' ')[0]}`;
+    sel.appendChild(opt);
+  });
+  // 保持/清除选中状态
+  if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+    sel.value = currentVal;
+    sel.classList.add('focused');
+    const hint = document.getElementById('focusHint');
+    if (hint) hint.textContent = `聚焦 ${currentVal} · 地图仅显示该任务范围`;
+  } else {
+    focusedMissionId = null;
+    sel.value = '';
+    sel.classList.remove('focused');
+    const hint = document.getElementById('focusHint');
+    if (hint) hint.textContent = '聚焦后仅显示该任务航迹/环/走廊';
+  }
+}
 
 // 按当前筛选条件过滤历史任务
 function filteredHistoryTasks() {
@@ -4763,7 +5049,7 @@ function renderHistoryList(tasks) {
   tasks.forEach(t => {
     const morph = predictMorphology(t);
     const item = document.createElement('div');
-    item.className = 'history-item' + (selectedHistoryCode === t.code ? ' active' : '');
+    item.className = 'history-item' + (focusedMissionId === t.code ? ' active' : '');
     item.innerHTML = `
       <div class="hi-head">
         <span class="hi-code">${t.code}</span>
@@ -4776,26 +5062,8 @@ function renderHistoryList(tasks) {
       <div class="hi-meta" style="color:var(--accent-soft)">${morph.desc}</div>
     `;
     item.addEventListener('click', () => {
-      if (selectedHistoryCode === t.code) {
-        // 再次点击已选中的任务：恢复显示全部
-        selectedHistoryCode = null;
-      } else {
-        selectedHistoryCode = t.code;
-        const site = launchSites.find(s => s.name === t.site);
-        if (site) {
-          if (t.twilight) {
-            // 晨昏任务：缩放到能完整看到 2000km 拍摄范围（覆盖重庆等远距观测点）
-            map.fitBounds([
-              offsetPoint(site.coords, 0, VIEW_RADIUS_KM),
-              offsetPoint(site.coords, 90, VIEW_RADIUS_KM),
-              offsetPoint(site.coords, 180, VIEW_RADIUS_KM),
-              offsetPoint(site.coords, 270, VIEW_RADIUS_KM),
-            ], { padding: [50, 50], duration: 1.1 });
-          } else {
-            map.flyTo(site.coords, 7, { duration: 1.0 });
-          }
-        }
-      }
+      // 点击已聚焦任务：取消聚焦，恢复全部；否则聚焦该任务
+      setMissionFocus(focusedMissionId === t.code ? null : t.code);
       applyHistoryFilter();
     });
     list.appendChild(item);
@@ -4831,7 +5099,7 @@ function renderFutureList() {
   tasks.forEach(t => {
     const morph = predictMorphology(t);
     const item = document.createElement('div');
-    item.className = 'history-item future-item';
+    item.className = 'history-item future-item' + (focusedMissionId === t.code ? ' active' : '');
     item.innerHTML = `
       <div class="hi-head">
         <span class="hi-code">${t.code}</span>
@@ -4856,9 +5124,10 @@ function renderFutureList() {
     item.appendChild(subBtn);
 
     item.addEventListener('click', () => {
-      const site = launchSites.find(s => s.name === t.site);
-      if (site) map.flyTo(site.coords, 8, { duration: 1.0 });
+      // 点击已聚焦任务：取消聚焦，恢复全部；否则聚焦该任务
+      setMissionFocus(focusedMissionId === t.code ? null : t.code);
       // 展示该发射场最近观测点的拍摄参数
+      const site = launchSites.find(s => s.name === t.site);
       if (site && site.observations.length) {
         renderParamsPanel(site.observations[0], site);
       }
@@ -5122,11 +5391,15 @@ function statusBadge(t) {
 
 function applyHistoryFilter() {
   const all = filteredHistoryTasks();
-  // 若选中任务已不在筛选结果中，自动取消选中
-  if (selectedHistoryCode && !all.some(t => t.code === selectedHistoryCode)) {
-    selectedHistoryCode = null;
+  // 若聚焦任务已不在筛选结果中，自动取消聚焦
+  if (focusedMissionId && !all.some(t => t.code === focusedMissionId)) {
+    focusedMissionId = null;
+    const sel = document.getElementById('missionFocus');
+    const hint = document.getElementById('focusHint');
+    if (sel) { sel.value = ''; sel.classList.remove('focused'); }
+    if (hint) hint.textContent = '聚焦后仅显示该任务航迹/环/走廊';
   }
-  const visible = selectedHistoryCode ? all.filter(t => t.code === selectedHistoryCode) : all;
+  const visible = focusedMissionId ? all.filter(t => t.code === focusedMissionId) : all;
   renderMissionSet(visible, historyMissionGroup);
   renderHistoryList(all);
   const hint = document.getElementById('missionHint');
@@ -5134,14 +5407,15 @@ function applyHistoryFilter() {
   const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
 
   if (hint) {
-    if (selectedHistoryCode) {
-      const sel = all.find(t => t.code === selectedHistoryCode);
-      hint.textContent = `已选中：${sel ? sel.code : ''}（再次点击该任务恢复全部 ${all.length} 个）${altSuffix}`;
+    if (focusedMissionId) {
+      const sel = all.find(t => t.code === focusedMissionId);
+      hint.textContent = `已聚焦：${sel ? sel.code : ''}（再次点击恢复全部 ${all.length} 个）${altSuffix}`;
     } else {
       const tw = all.filter(t => t.twilight).length;
       hint.textContent = `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
     }
   }
+  refreshMissionFocusOptions();
 }
 
 function switchMission(mode) {
@@ -5172,6 +5446,7 @@ function switchMission(mode) {
   document.querySelectorAll('.mission-tab').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
+  refreshMissionFocusOptions();
 }
 
 // 绑定切换按钮（用 addEventListener 而非内联 onclick，规避 CSP 限制）
@@ -5207,6 +5482,15 @@ document.querySelectorAll('.windy-btn').forEach(btn => {
 const weatherBtn = document.getElementById('weatherToggle');
 if (weatherBtn) weatherBtn.addEventListener('click', renderWeatherPanel);
 
+// 任务聚焦下拉
+const missionFocusSel = document.getElementById('missionFocus');
+if (missionFocusSel) {
+  missionFocusSel.addEventListener('change', e => {
+    setMissionFocus(e.target.value);
+  });
+  refreshMissionFocusOptions();
+}
+
 // 海拔输入绑定
 const altSlider = document.getElementById('altitudeSlider');
 const altInput = document.getElementById('altitudeInput');
@@ -5218,7 +5502,7 @@ function onAltitudeChange(val) {
   updateAltitudeHint(v);
   // 重绘当前任务组（含同心环）
   const currentGroup = currentMissionMode === 'future' ? futureMissionGroup : historyMissionGroup;
-  renderMissionSet(currentMissionMode === 'future' ? trajectories : historicalTrajectories, currentGroup);
+  renderMissionSet(currentMissionMode === 'future' ? trajectories : filteredHistoryTasks(), currentGroup);
   renderScorePanel();
   renderReviewPanel();
   // 更新提示文字
@@ -5227,11 +5511,15 @@ function onAltitudeChange(val) {
     const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
     if (currentMissionMode === 'future') {
       const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
-      hint.textContent = `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+      hint.textContent = focusedMissionId
+        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
+        : `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
     } else {
-      const all = historicalTrajectories;
+      const all = filteredHistoryTasks();
       const tw = all.filter(t => t.twilight).length;
-      hint.textContent = `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
+      hint.textContent = focusedMissionId
+        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${all.length} 个）${altSuffix}`
+        : `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
     }
   }
 }
@@ -5352,6 +5640,584 @@ function renderLocatePanel(lat, lng) {
 
 const locateBtn = document.getElementById('locateBtn');
 if (locateBtn) locateBtn.addEventListener('click', locateUser);
+
+/* ============================================
+   第一梯队 · 高级拍摄辅助
+   1) 发射-暮光窗口交并：最佳拍摄时间 + 方位角 + 仰角
+   2) 可见性综合评分 + 地图热力图层
+   3) 轨迹 + 方位实时指向（定位后）
+   ============================================ */
+
+/* --- 太阳高度角（给定位置与时刻）--- */
+function solarAltitudeDeg(lat, lng, date) {
+  const sp = subsolarPoint(date);
+  const dec = sp.lat * Math.PI / 180;
+  const phi = lat * Math.PI / 180;
+  const ha = (sp.lon - lng) * Math.PI / 180;
+  const sinAlt = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(ha);
+  return Math.asin(Math.max(-1, Math.min(1, sinAlt))) * 180 / Math.PI;
+}
+
+/* --- 观测者看目标点的仰角（目标高度 hAltKm）--- */
+function elevationDeg(obs, target, hAltKm) {
+  const d = Math.max(haversineKm(obs, target), 0.1);
+  return Math.atan2(hAltKm, d) * 180 / Math.PI;
+}
+
+/* --- 观测者到轨迹最近点：方位角 / 最近坐标 / 距离 --- */
+function bearingToTrajectory(obs, path) {
+  let nearest = null, bestD = Infinity;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i], b = path[i + 1];
+    const toXY = (pt) => [pt[1] * 111.32 * Math.cos(pt[0] * Math.PI / 180), pt[0] * 110.574];
+    const P = toXY(obs), A = toXY(a), B = toXY(b);
+    const dx = B[0] - A[0], dy = B[1] - A[1];
+    const len2 = dx * dx + dy * dy;
+    let t = len2 === 0 ? 0 : ((P[0] - A[0]) * dx + (P[1] - A[1]) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const lat = a[0] + (b[0] - a[0]) * t;
+    const lng = a[1] + (b[1] - a[1]) * t;
+    const d = haversineKm(obs, [lat, lng]);
+    if (d < bestD) { bestD = d; nearest = [lat, lng]; }
+  }
+  return { bearing: (bearing(obs, nearest) + 360) % 360, nearest, distKm: bestD };
+}
+
+/* --- 观测者视角综合评分（0-100）--- */
+function taskScore(t, obs) {
+  if (!t.path || !t.path.length) return 0;
+  const tgt = bearingToTrajectory(obs, t.path);
+  if (!t.twilight) return 15; // 白天发射基本拍不到火箭云
+  let score = 40;             // 暮光是前提
+  const d = tgt.distKm;
+  if (d <= 2000) {
+    if (d >= 300 && d <= 1000) score += 30; // 最佳火箭云形态带
+    else if (d < 50) score += 12;            // 过近，只见尾焰
+    else if (d <= 300) score += 20;          // 尾迹云起点
+    else score += 24;                        // 1000-2000 余光带
+  }
+  if (tgt.distKm <= CORRIDOR_HALF_WIDTH_KM) score += 20; // 走廊内
+  else score += 10;
+  if (observerAltitude >= 1500) score += 10; // 高海拔视野加成
+  else if (observerAltitude >= 500) score += 5;
+  return Math.max(0, Math.min(100, score));
+}
+
+/* --- 某发射场参考时刻附近的暮光窗口（太阳高度 ∈ [-18,0]，5 分钟步长扫描 ±12h）--- */
+function findTwilightWindows(siteCoords, refMs) {
+  const windows = [];
+  const startMs = refMs - 12 * 3600 * 1000;
+  let cur = null;
+  for (let i = 0; i <= 24 * 60; i += 5) {
+    const t = new Date(startMs + i * 5 * 60 * 1000);
+    const a = solarAltitudeDeg(siteCoords[0], siteCoords[1], t);
+    const inTw = a >= -18 && a <= 0;
+    if (inTw && !cur) cur = t;
+    else if (!inTw && cur) { windows.push({ start: cur, end: new Date(t.getTime() - 5 * 60 * 1000) }); cur = null; }
+  }
+  if (cur) windows.push({ start: cur, end: new Date(startMs + 24 * 60 * 5 * 60 * 1000) });
+  return windows;
+}
+
+/* --- 功能1：计算所有未来任务的最佳拍摄窗口 + 方位 + 仰角 --- */
+function computeShotWindows() {
+  const panel = document.getElementById('shotWindowPanel');
+  const hint = document.getElementById('advHint');
+  const obs = userLatLng;
+  if (!obs) {
+    if (hint) hint.textContent = '请先点击「定位我的位置」，以便计算方位角与仰角';
+    return;
+  }
+  const tasks = trajectories.filter(t => new Date(t.launchTime).getTime() >= Date.now() - 86400000);
+  if (!tasks.length) { if (panel) panel.innerHTML = '<div class="lp-row">暂无未来发射任务</div>'; return; }
+  const rows = tasks.map(t => {
+    const site = launchSites.find(s => s.name === t.site);
+    const path = t.path && t.path.length ? t.path : [[0, 0]];
+    const tgt = bearingToTrajectory(obs, path);
+    const el = elevationDeg(obs, tgt.nearest, MAX_CLOUD_ALT_KM);
+    const score = taskScore(t, obs);
+    const tws = site ? findTwilightWindows(site.coords, new Date(t.launchTime).getTime()) : [];
+    const nearTw = tws.find(w => Math.abs(w.start.getTime() - new Date(t.launchTime).getTime()) < 6 * 3600 * 1000);
+    const scoreColor = score >= 70 ? '#27AE60' : score >= 40 ? '#F1C40F' : '#C0392B';
+    return `<div class="lp-row" style="flex-direction:column;align-items:flex-start;gap:.2rem">
+      <div style="display:flex;justify-content:space-between;width:100%">
+        <span class="lp-site">${t.code} · ${t.site}</span>
+        <span class="score-badge" style="color:${scoreColor}">${score}</span>
+      </div>
+      <div class="w-detail">发射 ${fmtBeijing(t.launchTime)} · 方位 ${tgt.bearing.toFixed(0)}° · 仰角 ${el.toFixed(1)}° · 距轨迹 ${Math.round(tgt.distKm)}km</div>
+      ${nearTw ? `<div class="w-detail" style="color:${scoreColor}">暮光窗口 ${fmtBeijing(nearTw.start.toISOString())} → ${fmtBeijing(nearTw.end.toISOString())}</div>` : `<div class="w-detail" style="color:#8a6110">发射时刻附近无暮光窗口 · 白天难拍火箭云</div>`}
+    </div>`;
+  }).join('');
+  panel.innerHTML = rows;
+  if (hint) hint.textContent = '已按你的位置计算各任务的最佳拍摄窗口 · 数值越高越值得拍';
+}
+
+/* --- 功能2：可见性评分热力图层 --- */
+let heatLayerGroup = null;
+function renderHeatmap() {
+  const btn = document.getElementById('heatBtn');
+  if (heatLayerGroup) {
+    map.removeLayer(heatLayerGroup);
+    heatLayerGroup = null;
+    if (btn) btn.textContent = '🗺 可见性评分热力';
+    return;
+  }
+  const twilightTasks = trajectories.filter(t => t.twilight && new Date(t.launchTime).getTime() >= Date.now());
+  if (!twilightTasks.length) {
+    const hint = document.getElementById('advHint');
+    if (hint) hint.textContent = '当前无晨昏发射任务，无法生成热力';
+    return;
+  }
+  heatLayerGroup = L.layerGroup();
+  twilightTasks.forEach(t => {
+    const path = t.path || [];
+    if (path.length < 2) return;
+    const samples = [];
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i], b = path[i + 1];
+      const segs = 12;
+      for (let s = 0; s <= segs; s++) {
+        const lat = a[0] + (b[0] - a[0]) * s / segs;
+        const lng = a[1] + (b[1] - a[1]) * s / segs;
+        for (const off of [-3, -1, 0, 1, 3]) {
+          samples.push(offsetPoint([lat, lng], bearing(a, b) + 90, 60 * off));
+        }
+      }
+    }
+    samples.forEach(p => {
+      const d = pointToPolylineKm(p, path);
+      let sc = 0.5;
+      if (d >= 300 && d <= 1000) sc = 0.9;
+      else if (d < 300) sc = 0.5;
+      else sc = 0.6;
+      if (d <= CORRIDOR_HALF_WIDTH_KM) sc = Math.min(1, sc + 0.1);
+      const color = sc >= 0.8 ? '#27AE60' : sc >= 0.6 ? '#F1C40F' : '#C0392B';
+      L.circle(p, {
+        radius: 60000, color, weight: 0, fillColor: color,
+        fillOpacity: 0.18 * sc + 0.05, interactive: false,
+      }).addTo(heatLayerGroup);
+    });
+  });
+  heatLayerGroup.addTo(map);
+  try { heatLayerGroup.bringToBack(); } catch (e) {}
+  if (btn) btn.textContent = '🗺 关闭热力';
+  const hint = document.getElementById('advHint');
+  if (hint) hint.textContent = '绿色=最佳火箭云形态带(300-1000km) · 黄色=尾迹带 · 红色=过近';
+}
+
+/* --- 功能3：轨迹 + 方位实时指向 --- */
+function bearingName(deg) {
+  const dirs = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+}
+let aimLayer = null;
+function drawAim() {
+  const btn = document.getElementById('aimBtn');
+  if (aimLayer) {
+    map.removeLayer(aimLayer);
+    aimLayer = null;
+    if (btn) btn.textContent = '🧭 方位实时指向';
+    return;
+  }
+  if (!userLatLng) {
+    const hint = document.getElementById('advHint');
+    if (hint) hint.textContent = '请先点击「定位我的位置」再启用方位指向';
+    return;
+  }
+  const twTasks = trajectories.filter(t => t.twilight && new Date(t.launchTime).getTime() >= Date.now());
+  if (!twTasks.length) {
+    const hint = document.getElementById('advHint');
+    if (hint) hint.textContent = '当前无晨昏发射任务';
+    return;
+  }
+  let best = null, bestScore = -1;
+  twTasks.forEach(t => { const s = taskScore(t, userLatLng); if (s > bestScore) { bestScore = s; best = t; } });
+  const tgt = bearingToTrajectory(userLatLng, best.path || [[0, 0]]);
+  const el = elevationDeg(userLatLng, tgt.nearest, MAX_CLOUD_ALT_KM);
+  aimLayer = L.layerGroup();
+  const line = L.polyline([userLatLng, tgt.nearest], { color: '#7D3C98', weight: 2.5, opacity: 0.85, dashArray: '6 6' });
+  aimLayer.addLayer(line);
+  const mid = [(userLatLng[0] + tgt.nearest[0]) / 2, (userLatLng[1] + tgt.nearest[1]) / 2];
+  const ang = tgt.bearing;
+  const arrow = L.divIcon({ className: '', html: `<div class="traj-arrow" style="transform:rotate(${ang}deg);border-bottom-color:#7D3C98;"></div>`, iconSize: [12, 16], iconAnchor: [6, 8] });
+  aimLayer.addLayer(L.marker(mid, { icon: arrow, interactive: false }));
+  line.bindPopup(
+    `<strong>${best.code} · 朝向</strong>` +
+    `<span class="popup-detail">方位角 ${tgt.bearing.toFixed(0)}°（${bearingName(tgt.bearing)}）</span>` +
+    `<span class="popup-detail">仰角 ${el.toFixed(1)}°（火箭云约 ${MAX_CLOUD_ALT_KM}km 高度）</span>` +
+    `<span class="popup-detail">距轨迹 ${Math.round(tgt.distKm)} km · 综合评分 ${bestScore}</span>`
+  );
+  aimLayer.addTo(map);
+  if (btn) btn.textContent = '🧭 关闭方位';
+  const hint = document.getElementById('advHint');
+  if (hint) hint.textContent = `朝向 ${bearingName(tgt.bearing)} · ${tgt.bearing.toFixed(0)}° · 仰角 ${el.toFixed(1)}° · 抬头看约 ${Math.round(el)}° 高空`;
+}
+
+const shotWindowBtn = document.getElementById('shotWindowBtn');
+if (shotWindowBtn) shotWindowBtn.addEventListener('click', computeShotWindows);
+const heatBtn = document.getElementById('heatBtn');
+if (heatBtn) heatBtn.addEventListener('click', renderHeatmap);
+const aimBtn = document.getElementById('aimBtn');
+if (aimBtn) aimBtn.addEventListener('click', drawAim);
+
+/* ============================================
+   月亮 / 太阳 · 凌轨投影线
+   显示在地面能拍到火箭从月亮/太阳圆面前穿过的“投影线”（occultation path）。
+   原理：某时刻火箭位于（星下点, 高度h），天体方位角 Az、仰角 El。
+        观测者需位于星下点沿 (Az+180°) 方向、距离 d = h/tan(El) 处，
+        此时火箭与天体视线重合 → 火箭从圆面穿过。
+        横向容差带宽度 = d·tan(0.25°)（天体视半径）。
+   ============================================ */
+
+function norm360(x) { x = x % 360; if (x < 0) x += 360; return x; }
+
+/* 月亮地心黄经/黄纬（低精度主项，Meeus 简化） */
+function moonEcliptic(date) {
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const T = (JD - 2451545.0) / 36525;
+  const rad = d => d * Math.PI / 180;
+  const s = Math.sin, c = Math.cos;
+  const Lp = rad(218.316 + 481267.8813 * T);
+  const D  = rad(297.850 + 445267.1115 * T);
+  const M  = rad(357.529 + 35999.050 * T);
+  const Mp = rad(134.963 + 477198.8676 * T);
+  const F  = rad(93.272 + 483202.018 * T);
+  const lam = Lp
+    + 6.289 * s(Mp) + 1.274 * s(2 * D - Mp) + 0.658 * s(2 * D) + 0.214 * s(2 * Mp)
+    - 0.186 * s(M) - 0.114 * s(2 * F) + 0.059 * s(2 * D - 2 * Mp)
+    + 0.047 * s(2 * D - M) + 0.055 * s(2 * D + Mp) + 0.041 * s(2 * D - 2 * M)
+    + 0.020 * s(Mp + M) - 0.020 * s(Mp - M) + 0.018 * s(2 * D - 2 * Mp - M)
+    + 0.017 * s(2 * Mp - F) + 0.016 * s(2 * Mp + F) + 0.015 * s(3 * Mp)
+    + 0.014 * s(2 * D - Mp - M) + 0.012 * s(2 * D + Mp - M);
+  const bet = 5.128 * s(F) + 0.280 * s(Mp + F) + 0.277 * s(Mp - F)
+    + 0.173 * s(2 * D - F) + 0.055 * s(2 * D + F - Mp) + 0.046 * s(2 * D - F - Mp)
+    + 0.033 * s(2 * D + F) + 0.017 * s(2 * Mp + F);
+  return { lon: lam, lat: bet };
+}
+
+/* 月亮赤经/赤纬（度） */
+function moonRaDec(date) {
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const T = (JD - 2451545.0) / 36525;
+  const eps = (23.439 - 0.0130 * T) * Math.PI / 180;
+  const { lon, lat } = moonEcliptic(date);
+  const s = Math.sin, c = Math.cos;
+  const ra = Math.atan2(s(lon) * c(eps) - Math.tan(lat) * s(eps), c(lon));
+  const dec = Math.asin(Math.max(-1, Math.min(1, s(lat) * c(eps) + c(lat) * s(eps) * s(lon))));
+  return { ra, dec };
+}
+
+/* 月亮地心距离（km，低精度主项） */
+function moonDistKm(date) {
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const T = (JD - 2451545.0) / 36525;
+  const rad = d => d * Math.PI / 180;
+  const s = Math.sin;
+  const Lp = rad(218.316 + 481267.8813 * T);
+  const D  = rad(297.850 + 445267.1115 * T);
+  const Mp = rad(134.963 + 477198.8676 * T);
+  return 385000.56 - 20905.355 * s(Mp) - 3699.111 * s(2 * D - Mp)
+       - 2955.968 * s(2 * D) - 569.925 * s(2 * Mp);
+}
+
+/* 赤经/赤纬 → 观测点方位角/仰角（地心，无视差） */
+function raDecToAzAlt(obs, ra, dec, date) {
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const n = JD - 2451545.0;
+  const gmst = normDeg(280.46061837 + 360.98564736629 * n);
+  const lst = normDeg(gmst + obs[1]);
+  const H = (lst - ra) * Math.PI / 180;
+  const phi = obs[0] * Math.PI / 180;
+  const d = dec;
+  const s = Math.sin, c = Math.cos;
+  const sinAlt = s(phi) * s(d) + c(phi) * c(d) * c(H);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+  const ca = (s(d) - s(phi) * s(alt)) / (c(phi) * c(alt));
+  let az = Math.acos(Math.max(-1, Math.min(1, ca)));
+  if (Math.sin(H) > 0) az = 2 * Math.PI - az;
+  return { az: az * 180 / Math.PI, el: alt * 180 / Math.PI };
+}
+
+/* 赤经/赤纬 → 观测点方位角/仰角（含月亮视差修正，topocentric） */
+function raDecToAzAltTopo(obs, ra, dec, date, distKm) {
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const n = JD - 2451545.0;
+  const gmst = normDeg(280.46061837 + 360.98564736629 * n);
+  const lst = normDeg(gmst + obs[1]);
+  const H = (lst - ra) * Math.PI / 180;
+  const phi = obs[0] * Math.PI / 180;
+  const d = dec;
+  const s = Math.sin, c = Math.cos;
+  if (distKm && distKm < 1e6) {
+    // 视差修正：观测者地心坐标分量
+    const R_E = 6378.14;
+    const u = Math.atan2(0.99664719 * Math.tan(phi), 1);
+    const rhoc = c(u);                       // 赤道平面分量
+    const pi = Math.asin(Math.max(-1, Math.min(1, R_E / distKm))); // 视差角
+    const dH = Math.atan2(-rhoc * Math.sin(pi) * s(H), c(d) - rhoc * Math.sin(pi) * c(H));
+    const Ht = H + dH;
+    const topoDec = Math.asin(Math.max(-1, Math.min(1,
+      (s(d) - rhoc * Math.sin(pi) * c(H)) * c(dH) + rhoc * Math.sin(pi) * s(H) * s(dH))));
+    const sinAlt = s(phi) * s(topoDec) + c(phi) * c(topoDec) * c(Ht);
+    const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+    const ca = (s(topoDec) - s(phi) * s(alt)) / (c(phi) * c(alt));
+    let az = Math.acos(Math.max(-1, Math.min(1, ca)));
+    if (s(Ht) > 0) az = 2 * Math.PI - az;
+    return { az: az * 180 / Math.PI, el: alt * 180 / Math.PI };
+  }
+  // 无视差（太阳等远天体）
+  return raDecToAzAlt(obs, ra, dec, date);
+}
+
+/* 天体方位角/仰角：太阳用星下点，月亮用低精度历表+视差修正 */
+function targetAzAlt(obs, date, kind) {
+  if (kind === 'sun') {
+    const sp = subsolarPoint(date);
+    return { az: normDeg(bearing(obs, [sp.lat, sp.lon])), el: solarAltitudeDeg(obs[0], obs[1], date) };
+  }
+  const { ra, dec } = moonRaDec(date);
+  return raDecToAzAltTopo(obs, ra, dec, date, moonDistKm(date));
+}
+
+/* 火箭高度模型（分段爬升）：0-150s 近垂直加速至 ~120km，之后指数趋近 500km */
+function rocketAltitudeKm(tSec) {
+  const t = Math.max(0, tSec);
+  if (t < 150) return 120 * (t / 150);
+  return 120 + (500 - 120) * (1 - Math.exp(-(t - 150) / 400));
+}
+
+/* 按地面航迹里程比例插值出某分位点 */
+function pointAtFraction(path, f) {
+  const seg = [];
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const L = Math.max(haversineKm(path[i], path[i + 1]), 0.001);
+    seg.push(L); total += L;
+  }
+  if (total === 0) return path[0];
+  let target = f * total;
+  for (let i = 0; i < seg.length; i++) {
+    if (target <= seg[i]) {
+      const t = target / seg[i];
+      return [path[i][0] + (path[i + 1][0] - path[i][0]) * t, path[i][1] + (path[i + 1][1] - path[i][1]) * t];
+    }
+    target -= seg[i];
+  }
+  return path[path.length - 1];
+}
+
+/* 两方向(az,el)的角距离（度） */
+function angSepDeg(az1, el1, az2, el2) {
+  const r1 = az1 * Math.PI / 180, r2 = az2 * Math.PI / 180;
+  const d1 = el1 * Math.PI / 180, d2 = el2 * Math.PI / 180;
+  return Math.acos(Math.max(-1, Math.min(1,
+    Math.sin(d1) * Math.sin(d2) + Math.cos(d1) * Math.cos(d2) * Math.cos(r1 - r2)
+  ))) * 180 / Math.PI;
+}
+
+/* 凌轨投影的圆面视半径阈值（度） */
+const OCC_DISK_R_DEG = 0.27;
+
+/* 计算某任务的凌日/凌月投影路径点
+   机制：观测者位于星下点沿反天体方向、距离 d=h/tan(el) 处即共线。
+   迭代收敛到真实共线；约束观测距离贴近轨迹成带；月亮含视差修正。 */
+function computeOccultPath(t, kind) {
+  const path = t.path;
+  if (!path || path.length < 2) return null;
+  const launchMs = new Date(t.launchTime).getTime();
+  const FLIGHT_S = 1200; // 采样发射后 20 分钟
+  const STEP = 10;       // 10s 步长
+  const pts = [];
+  for (let ts = 0; ts <= FLIGHT_S; ts += STEP) {
+    const f = ts / FLIGHT_S;
+    const gp = pointAtFraction(path, f);
+    const date = new Date(launchMs + ts * 1000);
+    const h = rocketAltitudeKm(ts);
+    // 初始：用星下点 gp 处天体方向构造观测者
+    let ta = targetAzAlt(gp, date, kind);
+    if (ta.el < 15 || ta.el > 70) continue;   // 仰角须在可拍范围（较高，贴近轨迹）
+    let d = h / Math.tan(ta.el * Math.PI / 180);
+    if (d < 30 || d > 900) continue;          // 约束观测距离贴近轨迹成带
+    let obsPt = offsetPoint(gp, normDeg(ta.az + 180), d);
+    // 迭代收敛：反复在观测者位置重算天体方向并重定位，直到火箭与天体真实共线
+    for (let it = 0; it < 6; it++) {
+      const tn = targetAzAlt(obsPt, date, kind);
+      if (tn.el < 15 || tn.el > 70) break;
+      const dn = h / Math.tan(tn.el * Math.PI / 180);
+      const newObs = offsetPoint(gp, normDeg(tn.az + 180), dn);
+      if (Math.abs(newObs[0] - obsPt[0]) < 1e-6 && Math.abs(newObs[1] - obsPt[1]) < 1e-6) {
+        obsPt = newObs; ta = tn; d = dn; break;
+      }
+      obsPt = newObs; ta = tn; d = dn;
+    }
+    if (d < 30 || d > 900) continue;          // 最终距离范围
+    // 角距自检：从最终观测者看火箭 vs 天体，真实角距离
+    const rocketAz = norm360(bearing(obsPt, gp));
+    const rocketEl = Math.atan2(h, Math.max(d, 0.1)) * 180 / Math.PI;
+    const sep = angSepDeg(rocketAz, rocketEl, norm360(ta.az), ta.el);
+    pts.push({ lat: obsPt[0], lng: obsPt[1], el: ta.el, az: ta.az, d, h, time: date, sep });
+  }
+  return pts.length >= 2 ? pts : null;
+}
+
+/* ============================================
+   凌日/凌月投影线（Planit 风格）
+   同时绘制三条等宽色带：
+     飞行路径(红) · 凌日机位线(黄) · 凌月机位线(蓝)
+   带宽 = 天体视半径对应的地面容差带
+   点击色带显示该点详情
+   ============================================ */
+const occLayers = { transit: { layer: null } };
+function setOccHint(html) { const h = document.getElementById('occHint'); if (h) h.innerHTML = html; }
+function updateOccHint() {
+  if (occLayers.transit.layer)
+    setOccHint('☀🌙 凌日凌月投影线已显示 · 红=飞行路径 · 黄=凌日机位线 · 蓝=凌月机位线 · 点击色带查看详情');
+  else
+    setOccHint('同时显示飞行路径(红)、凌日机位线(黄)、凌月机位线(蓝)，带内可拍到火箭穿过天体圆面');
+}
+
+/* 天体视半径（度） */
+const SUN_ANG_RAD = 0.267, MOON_ANG_RAD = 0.27;
+
+/* 绘制一条凌轨色带：沿中心线铺出上下两条等宽边缘，形成色带 */
+function makeBand(g, pts, color, angRad, sunMoon) {
+  if (!pts || pts.length < 2) return;
+  const asLL = p => [p.lat, p.lng];
+  const center = pts.map(asLL);
+  // 中心参考线
+  L.polyline(center, {
+    color, weight: 2, opacity: 0.85, interactive: false,
+  }).addTo(g);
+  // 两侧边缘（等宽色带，带宽 = 天体视半径锥宽在地面的投影）
+  const left = [], right = [];
+  pts.forEach((p, i) => {
+    const ang = i === 0 ? bearing(asLL(pts[0]), asLL(pts[1]))
+      : i === pts.length - 1 ? bearing(asLL(pts[i - 1]), asLL(pts[i]))
+      : (bearing(asLL(pts[i - 1]), asLL(pts[i])) + bearing(asLL(pts[i]), asLL(pts[i + 1]))) / 2;
+    const bw = Math.max(p.d * Math.tan(angRad * Math.PI / 180), 1);
+    left.push(offsetPoint([p.lat, p.lng], ang + 90, bw));
+    right.push(offsetPoint([p.lat, p.lng], ang - 90, bw));
+  });
+  const band = L.polygon(left.concat(right.reverse()), {
+    color, weight: 1, opacity: 0.35, fillColor: color, fillOpacity: 0.20,
+    interactive: true,
+  }).addTo(g);
+  // 记录色带供调试/测试
+  if (!window.__occBands) window.__occBands = [];
+  window.__occBands.push({ kind: sunMoon, pts, band });
+  // 点击交互：显示该位置详情
+  band.on('click', function(e) {
+    const hit = latlngToNearestPt(e.latlng, pts);
+    if (!hit) { map.closePopup(); return; }
+    const kind = sunMoon;
+    const name = kind === 'sun' ? '☀太阳' : '🌙月亮';
+    const sepOk = hit.sep < OCC_DISK_R_DEG;
+    const d = typeof hit.d === 'number' ? hit.d.toFixed(0) : '?';
+    const sepStr = hit.sep.toFixed(3);
+    L.popup()
+      .setLatLng([hit.lat, hit.lng])
+      .setContent(`
+        <div style="font-size:0.75rem;line-height:1.5;max-width:220px">
+          <b>${name}凌轨 · 观测机位</b><br>
+          <span style="color:#888">${fmtBeijing(hit.time.toISOString())}</span><br>
+          仰角 ${hit.el.toFixed(0)}° · 方位 ${hit.az.toFixed(0)}°<br>
+          距轨迹 ${d}km · 火箭高度 ${hit.h.toFixed(0)}km<br>
+          圆面角距 ${sepStr}° ${sepOk?'✅ 穿越':'——'}<br>
+          <span style="color:${sepOk?'#27AE60':'#C0392B'};font-size:0.65rem">
+            ${sepOk?'可拍到火箭从'+kind+'圆面穿过':'角距超出圆面视半径 '+OCC_DISK_R_DEG+'°'}
+          </span>
+        </div>`).openOn(map);
+  });
+}
+
+/* 查找 pts 中离 latlng 最近的点 */
+function latlngToNearestPt(latlng, pts) {
+  if (!pts || !pts.length) return null;
+  let best = null, bestD = Infinity;
+  pts.forEach(p => {
+    const d = haversineKm([latlng.lat, latlng.lng], [p.lat, p.lng]);
+    if (d < bestD) { bestD = d; best = p; }
+  });
+  return best;
+}
+
+function drawTransit() {
+  const btn = document.getElementById('transitBtn');
+  const holder = occLayers.transit;
+  if (holder.layer) {
+    map.removeLayer(holder.layer); holder.layer = null;
+    if (btn) btn.classList.remove('active');
+    updateOccHint();
+    showTransitLegend(false);
+    return;
+  }
+  const tasks = trajectories.filter(t => new Date(t.launchTime).getTime() >= Date.now());
+  if (!tasks.length) { setOccHint('暂无未来发射任务'); return; }
+  // 分别选出凌日、凌月采样数最多的任务
+  let sunT = null, sunP = null, moonT = null, moonP = null;
+  tasks.forEach(t => {
+    const sp = computeOccultPath(t, 'sun');
+    if (sp && sp.length > 2 && (!sunP || sp.length > sunP.length)) { sunT = t; sunP = sp; }
+    const mp = computeOccultPath(t, 'moon');
+    if (mp && mp.length > 2 && (!moonP || mp.length > moonP.length)) { moonT = t; moonP = mp; }
+  });
+  if (!sunT && !moonT) { setOccHint('近期发射均无良好凌日/凌月窗口'); return; }
+  const g = L.layerGroup();
+
+  // ① 飞行路径（红）
+  const flightT = sunT || moonT;
+  if (flightT && flightT.path && flightT.path.length >= 2) {
+    L.polyline(flightT.path, { color: '#E74C3C', weight: 3.5, opacity: 0.85, interactive: false }).addTo(g);
+  }
+
+  // ② 凌日机位线（黄）—— 完整色带
+  if (sunP) makeBand(g, sunP, '#F1C40F', SUN_ANG_RAD, 'sun');
+
+  // ③ 凌月机位线（蓝）—— 完整色带
+  if (moonP) makeBand(g, moonP, '#3498DB', MOON_ANG_RAD, 'moon');
+
+  // fitBounds 到三线覆盖范围
+  const all = [];
+  if (sunP) all.push.apply(all, sunP.map(p => [p.lat, p.lng]));
+  if (moonP) all.push.apply(all, moonP.map(p => [p.lat, p.lng]));
+  if (flightT && flightT.path) all.push.apply(all, flightT.path);
+  if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [40, 40] });
+
+  g.addTo(map);
+  holder.layer = g;
+  if (btn) btn.classList.add('active');
+
+  const sunCnt = sunP ? sunP.filter(p => p.sep < OCC_DISK_R_DEG).length : 0;
+  const moonCnt = moonP ? moonP.filter(p => p.sep < OCC_DISK_R_DEG).length : 0;
+  let msg = `☀🌙 凌日凌月投影 · ${flightT.code} ${flightT.site}<br>`;
+  const parts = [];
+  if (sunP) parts.push(`凌日 ${sunP.length} 点${sunCnt >= 2 ? '（可拍）' : '（参考）'}`);
+  if (moonP) parts.push(`凌月 ${moonP.length} 点${moonCnt >= 2 ? '（可拍）' : '（参考）'}`);
+  msg += parts.join(' · ') + '<br>点击色带查看该机位仰角/方位/时刻详情';
+  setOccHint(msg);
+  showTransitLegend(true);
+}
+
+/* 切换凌日凌月地图图例 */
+const OCC_LEGEND_HTML = `
+  <span class="lg-item"><span class="lg-zone" style="background:#E74C3C"></span> 飞行路径</span>
+  <span class="lg-item"><span class="lg-zone" style="background:#F1C40F"></span> 凌日机位线</span>
+  <span class="lg-item"><span class="lg-zone" style="background:#3498DB"></span> 凌月机位线</span>
+  <span class="lg-sep"></span>
+  <span class="lg-note">带宽=天体视半径容差 · 虚线主色为参考 · 点击色带查看该机位仰角/方位/时刻</span>`;
+const OCC_LEGEND_ORIG = null;
+function showTransitLegend(on) {
+  const lg = document.querySelector('.map-legend');
+  if (!lg) return;
+  if (on) {
+    if (!lg.dataset.occOrig) lg.dataset.occOrig = lg.innerHTML;
+    lg.innerHTML = OCC_LEGEND_HTML;
+  } else if (lg.dataset.occOrig) {
+    lg.innerHTML = lg.dataset.occOrig; delete lg.dataset.occOrig;
+  }
+}
+const transitBtn = document.getElementById('transitBtn');
+if (transitBtn) transitBtn.addEventListener('click', drawTransit);
 
 // 绑定筛选器变化事件
 const filterSiteSel = document.getElementById('filterSite');
@@ -5558,6 +6424,48 @@ window.addEventListener('resize', () => {
 window.addEventListener('load', () => {
   if (typeof map !== 'undefined') map.invalidateSize();
 });
+
+/* ============================================
+   ATLAS 视图切换：二维地图 / 三维地球
+   ============================================ */
+(function initAtlasModes() {
+  const box = document.getElementById('atlasMap');
+  const embed = document.getElementById('globeEmbed');
+  const frame = document.getElementById('globeFrame');
+  const legend = document.querySelector('#atlas .map-legend');
+  const btns = Array.from(document.querySelectorAll('.map-modes button'));
+  if (!box || !embed || !frame || !btns.length) return;
+
+  let loaded = false;
+
+  function setView(mode) {
+    const is3d = mode === '3d';
+    btns.forEach(btn => {
+      const on = btn.dataset.mapview === mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    box.classList.toggle('mode-3d', is3d);
+    embed.hidden = !is3d;
+    if (legend) legend.style.display = is3d ? 'none' : '';
+    if (is3d) {
+      // 首次进入时才加载三维页面，避免拖慢首屏
+      if (!loaded) {
+        frame.src = 'globe.html?embed=1';
+        loaded = true;
+      }
+    } else if (typeof map !== 'undefined') {
+      setTimeout(() => map.invalidateSize(), 80);
+    }
+  }
+
+  btns.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.mapview)));
+
+  // 直接访问 #atlas 时默认进入三维视图
+  const syncFromHash = () => { if (location.hash === '#atlas') setView('3d'); };
+  syncFromHash();
+  window.addEventListener('hashchange', syncFromHash);
+})();
 
 /* ============================================
    NAV SCROLL EFFECT
