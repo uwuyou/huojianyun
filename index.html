@@ -4076,6 +4076,46 @@ function sunAltitudeAt(lat, lon, date) {
   return 90 - Math.acos(Math.max(-1, Math.min(1, cosZ))) * 180 / Math.PI;
 }
 
+/* === 火箭云可观测性判定 ===
+   形成条件有两条：
+     ① 尾迹被照亮：发射场太阳高度角 > -18°（高空尾迹仍在阳光下）；
+     ② 观测者天空足够暗：发射场周边约 950 km（100 km 高度尾迹的地平距离）内，
+        存在太阳高度角 ∈ [-13°, 0°] 的区域。
+   只看发射场当地会漏判：例如酒泉 08:00 发射场为 +1.3°，看似“白天”，
+   但其西侧约 200 km 已进入晨昏区，甘肃西部、新疆一带仍可看到被照亮的高空尾迹。 */
+const OBSERVE_DISTANCES = [80, 140, 210, 300, 400, 520, 660, 800, 950];
+const OBSERVE_BEARINGS = [0, 22, 45, 67, 90, 112, 135, 157, 180, 202, 225, 247, 270, 292, 315, 337];
+
+function assessRocketCloud(lat, lon, date) {
+  const siteAlt = sunAltitudeAt(lat, lon, date);
+  if (siteAlt < -18) {
+    return { visible: false, siteAlt,
+      desc: `深夜（发射场太阳高度角 ${siteAlt.toFixed(1)}°）· 尾迹处在地球阴影中，无法形成可见火箭云` };
+  }
+  if (siteAlt <= 0) {
+    return { visible: true, siteAlt,
+      desc: `晨昏阶段（发射场太阳高度角 ${siteAlt.toFixed(1)}°）· 可拍摄火箭云` };
+  }
+  // 发射场已见日出/日落但天还亮：在周边寻找太阳高度角 ≤ -3°（天空足够暗）的
+  // 最近观测点，作为可见方向
+  let best = null;
+  for (const brng of OBSERVE_BEARINGS) {
+    for (const km of OBSERVE_DISTANCES) {
+      const p = offsetPoint([lat, lon], brng, km);
+      const alt = sunAltitudeAt(p[0], p[1], date);
+      if (alt < -13 || alt > 0) continue;
+      const score = alt <= -3 ? km : km + 5000;
+      if (!best || score < best.score) best = { km, brng, alt, score };
+    }
+  }
+  if (!best) {
+    return { visible: false, siteAlt,
+      desc: `白天（发射场太阳高度角 ${siteAlt.toFixed(1)}°）· 周边无晨昏观测区，无法拍摄火箭云` };
+  }
+  return { visible: true, siteAlt, best,
+    desc: `晨昏过渡（发射场 ${siteAlt.toFixed(1)}°）· ${azimuthText(best.brng)}约 ${Math.round(best.km)} km 处天空已暗（${best.alt.toFixed(1)}°），该方向可见火箭云` };
+}
+
 // 发射窗口内的采样时刻：窗口不超过 3 小时取窗口首/中/末，否则取发射时刻前后 10 分钟
 function missionTimes(t) {
   const base = new Date(t.launchTime || t.est_t0 || t.window_start);
@@ -5182,6 +5222,19 @@ function rebuildFutureTrajectories() {
     ensureDirectionalPath(t, dir);
   });
 
+  // 重新评估火箭云可观测性：数据源只按发射场当地太阳高度角判定，
+  // 会漏掉“发射场刚日出、周边仍在晨昏”的情况
+  items.forEach(t => {
+    const lat = Number(t.site_lat ?? t.debris_lat);
+    const lng = Number(t.site_lng ?? t.debris_lng);
+    const when = new Date(t.launchTime || t.est_t0 || t.window_start);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || isNaN(when.getTime())) return;
+    const a = assessRocketCloud(lat, lng, when);
+    t.sunAlt = a.siteAlt;
+    t.twilight = a.visible;
+    t.twilightDesc = a.desc;
+  });
+
   // 补充 diffDays 和 color 字段
   items.forEach(t => {
     t.diffDays = (new Date(t.launchTime).getTime() - NOW_TS) / 86400000;
@@ -5515,7 +5568,15 @@ function renderFutureList() {
 
 // ---------- 3. 火箭云形态预测 ----------
 function predictMorphology(t) {
-  if (!t.twilight) return { name: '无火箭云', cls: 'morph-none', desc: '白天发射，高空尾迹不被阳光照亮，通常无法形成可见火箭云' };
+  if (!t.twilight) {
+    const a = Number.isFinite(t.sunAlt) ? t.sunAlt : 0;
+    return {
+      name: '无火箭云', cls: 'morph-none',
+      desc: a < -18
+        ? '夜间发射，高空尾迹处在地球阴影中，无法形成可见火箭云'
+        : '白天发射，高空尾迹与天空亮度接近，无法形成可见火箭云'
+    };
+  }
   const a = t.sunAlt;
   if (a <= -12) return { name: '螺旋 / 水母形', cls: '', desc: '太阳高度角很低(-12°以下)，高层尾迹被强光照亮，易形成发光螺旋或水母状云' };
   if (a <= -6) return { name: '发光扇形', cls: '', desc: '晨昏蒙影较深阶段，尾迹扩张成发光扇形云团' };
