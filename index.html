@@ -1800,6 +1800,20 @@ h1, h2, h3, h4 {
   border-top: 1px dashed var(--line-strong);
 }
 
+/* 太阳高度角 -13°~0° 可见带说明 */
+.sun-band-cap {
+  max-width: min(340px, calc(100vw - 48px));
+  padding: 0.5rem 0.65rem;
+  background: rgba(15, 14, 12, 0.88);
+  color: #F5F2EC;
+  border: 1px solid rgba(245, 242, 236, 0.22);
+  border-radius: 3px;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.sun-band-cap b { color: #7BD8A6; letter-spacing: 0.02em; }
+
 /* 发射场名永久标签 */
 .site-label {
   background: rgba(15, 14, 12, 0.82) !important;
@@ -3026,7 +3040,7 @@ h1, h2, h3, h4 {
     <div class="section-header reveal visible">
       <span class="section-number">05 — Atlas</span>
       <h2 class="section-title">观测地图</h2>
-      <p class="section-subtitle">四大发射场坐标与最佳观测点位</p>
+      <p class="section-subtitle">发射方向判定与太阳高度角 -13°~0° 的可观测范围</p>
     </div>
 
     <div class="map-legend reveal visible">
@@ -3035,12 +3049,9 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-dot"></span> 发射场</span>
       <span class="lg-item"><span class="lg-dot-green"></span> 观测点</span>
       <span class="lg-item"><span class="lg-dot-gold"></span> 历史观测</span>
-      <span class="lg-sep"></span>
-      <span class="lg-label">可视环</span>
-      <span class="lg-item"><span class="lg-zone" style="background:#C0392B"></span> 文昌</span>
-      <span class="lg-item"><span class="lg-zone" style="background:#D68910"></span> 酒泉</span>
-      <span class="lg-item"><span class="lg-zone" style="background:#1E8449"></span> 太原</span>
-      <span class="lg-item"><span class="lg-zone" style="background:#1F618D"></span> 西昌</span>
+      <span class="lg-label">太阳高度角（发射时刻）</span>
+      <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> -13°~-6° · 天空较暗，火箭云清晰</span>
+      <span class="lg-item"><span class="lg-zone" style="background:#8E44AD"></span> -6°~0° · 天空较亮，对比度较低</span>
       <span class="lg-sep"></span>
       <span class="lg-label">发射任务 · 按时间远近</span>
       <span class="lg-item"><span class="lg-zone" style="background:#E74C3C"></span> 即将发射(&lt;1天)</span>
@@ -3049,7 +3060,7 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> 7-14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#2980B9"></span> &gt;14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#9A938A"></span> 已发射</span>
-      <span class="lg-note">任务航迹线颜色随发射时间远近变化（红近蓝远，已发射变灰）；拍摄走廊与拍摄距离环仅在晨昏阶段（太阳高度角 -18°~0°）绘制 · 侧边栏可切换「历史任务」验证拍摄位置</span>
+      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围不再绘制整圈距离环，只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 侧边栏可切换「历史任务」验证拍摄位置</span>
       <span class="lg-note" style="color:var(--accent-soft)">实时卫星云图已独立为新板块（见下方），支持卫星影像 / 云层 / 降水 / 风场 / 温度多图层切换；右上角图层面板可叠加 NASA MODIS 卫星影像</span>
     </div>
 
@@ -3157,7 +3168,7 @@ h1, h2, h3, h4 {
           <select id="missionFocus">
             <option value="">全部任务</option>
           </select>
-          <div class="focus-hint" id="focusHint">聚焦后仅显示该任务航迹/环/走廊</div>
+          <div class="focus-hint" id="focusHint">聚焦后按该任务射向显示可观测带</div>
         </div>
         <div class="enhance-panel">
           <div class="locate-row">
@@ -4017,9 +4028,148 @@ function refreshTwilight() {
 }
 setInterval(refreshTwilight, 600000);
 
+/* === 太阳高度角 -13°~0° 可观测范围 ===
+   火箭云要求地面已进入暮光（太阳在地平线下），而 80 km 高度的尾迹仍被阳光照亮。
+   因此二维地图不再绘制整圈“观测范围”，只绘制发射窗口内太阳高度角处于
+   -13°~0° 的区域：
+       -13°~-6° 天空较暗，尾迹明亮清晰（绿）
+        -6°~0°  天空较亮，对比度较低（紫）
+   该区域按发射时刻计算，时间窗内取并集；图像按 Web 墨卡托投影逐像素生成，
+   与底图瓦片严格对齐。 */
+const BAND_BOUNDS = [[-85.0511, -180], [85.0511, 180]];
+const BAND_COS_13 = Math.cos(103 * Math.PI / 180); // 太阳高度角 -13°
+const BAND_COS_6 = Math.cos(96 * Math.PI / 180);   // 太阳高度角 -6°
+let sunBandLayer = L.layerGroup().addTo(map);
+let sunBandKey = '';
+
+function sunAltitudeAt(lat, lon, date) {
+  const sp = subsolarPoint(date);
+  const φ = lat * Math.PI / 180;
+  const δ = sp.lat * Math.PI / 180;
+  const cosZ = Math.sin(φ) * Math.sin(δ)
+    + Math.cos(φ) * Math.cos(δ) * Math.cos((lon - sp.lon) * Math.PI / 180);
+  return 90 - Math.acos(Math.max(-1, Math.min(1, cosZ))) * 180 / Math.PI;
+}
+
+// 发射窗口内的采样时刻：窗口不超过 3 小时取窗口首/中/末，否则取发射时刻前后 10 分钟
+function missionTimes(t) {
+  const base = new Date(t.launchTime || t.est_t0 || t.window_start);
+  if (isNaN(base.getTime())) return [];
+  const ws = t.window_start ? new Date(t.window_start) : null;
+  const we = t.window_end ? new Date(t.window_end) : null;
+  if (ws && we && !isNaN(ws.getTime()) && !isNaN(we.getTime())
+      && we.getTime() - ws.getTime() <= 3 * 3600e3) {
+    return [ws, new Date((ws.getTime() + we.getTime()) / 2), we];
+  }
+  return [new Date(base.getTime() - 10 * 60000), base, new Date(base.getTime() + 10 * 60000)];
+}
+
+function buildSunBandCanvas(times) {
+  const W = 1024, H = 512, RAD = Math.PI / 180;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const data = img.data;
+  const subs = times.map((d) => {
+    const sp = subsolarPoint(d);
+    return { lon: sp.lon, sinδ: Math.sin(sp.lat * RAD), cosδ: Math.cos(sp.lat * RAD) };
+  });
+  for (let r = 0; r < H; r++) {
+    // 墨卡托行 → 纬度
+    const my = Math.PI * (1 - 2 * (r + 0.5) / H);
+    const lat = Math.atan(Math.sinh(my)) / RAD;
+    const sinφ = Math.sin(lat * RAD), cosφ = Math.cos(lat * RAD);
+    for (let c = 0; c < W; c++) {
+      const lon = -180 + 360 * (c + 0.5) / W;
+      let dark = false, lit = false;
+      for (let k = 0; k < subs.length; k++) {
+        const cosZ = sinφ * subs[k].sinδ
+          + cosφ * subs[k].cosδ * Math.cos((lon - subs[k].lon) * RAD);
+        if (cosZ <= 0 && cosZ >= BAND_COS_6) { lit = true; }
+        else if (cosZ < BAND_COS_6 && cosZ >= BAND_COS_13) { dark = true; break; }
+      }
+      const i = (r * W + c) * 4;
+      if (dark) { data[i] = 39; data[i + 1] = 174; data[i + 2] = 96; data[i + 3] = 92; }
+      else if (lit) { data[i] = 142; data[i + 1] = 68; data[i + 2] = 173; data[i + 3] = 70; }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+
+// 找到可观测带内距发射场最近的点（用于自动缩放与距离提示）
+function nearestBandPoint(times, site) {
+  if (!site || !times.length) return null;
+  const RAD = Math.PI / 180;
+  const subs = times.map((d) => {
+    const sp = subsolarPoint(d);
+    return { lon: sp.lon, sinδ: Math.sin(sp.lat * RAD), cosδ: Math.cos(sp.lat * RAD) };
+  });
+  let best = null, bestD = Infinity;
+  for (let lat = -75; lat <= 75; lat += 2) {
+    const φ = lat * RAD, sinφ = Math.sin(φ), cosφ = Math.cos(φ);
+    for (let lon = -180; lon < 180; lon += 2) {
+      let hit = false;
+      for (let k = 0; k < subs.length; k++) {
+        const cosZ = sinφ * subs[k].sinδ
+          + cosφ * subs[k].cosδ * Math.cos((lon - subs[k].lon) * RAD);
+        if (cosZ <= 0 && cosZ >= BAND_COS_13) { hit = true; break; }
+      }
+      if (!hit) continue;
+      const d = haversineKm(site, [lat, lon]);
+      if (d < bestD) { bestD = d; best = [lat, lon]; }
+    }
+  }
+  return best;
+}
+
+const sunBandCap = L.control({ position: 'bottomleft' });
+sunBandCap.onAdd = () => {
+  const div = L.DomUtil.create('div', 'sun-band-cap');
+  div.id = 'sunBandCap';
+  div.style.display = 'none';
+  return div;
+};
+sunBandCap.addTo(map);
+
+function updateSunBand(tasks) {
+  const list = tasks || [];
+  const focus = focusedMissionId ? list.find((t) => t.code === focusedMissionId) : null;
+  const target = focus
+    ? (focus.twilight ? focus : null)
+    : list.find((t) => t.twilight && missionTimes(t).length);
+  const key = target ? `${target.code}|${target.launchTime}|${focusedMissionId || ''}` : 'none';
+  if (key === sunBandKey) return;
+  sunBandKey = key;
+  sunBandLayer.clearLayers();
+  const cap = document.getElementById('sunBandCap');
+  if (!target) {
+    if (cap) cap.style.display = 'none';
+    return;
+  }
+  const times = missionTimes(target);
+  const canvas = buildSunBandCanvas(times);
+  L.imageOverlay(canvas.toDataURL('image/png'), BAND_BOUNDS, {
+    opacity: 1, interactive: false, pane: 'overlayPane',
+  }).addTo(sunBandLayer);
+  if (cap) {
+    const site = siteCoordsOf(target);
+    const near = nearestBandPoint(times, site);
+    const nearKm = near && site ? Math.round(haversineKm(site, near)) : null;
+    cap.style.display = '';
+    cap.innerHTML = `<b>太阳高度角 -13°~0°</b> · ${target.code} · ${fmtBeijing(times[1].toISOString())}（北京时间）<br>`
+      + `绿色 -13°~-6°：天空较暗，火箭云清晰　紫色 -6°~0°：天空较亮，对比度较低`
+      + (nearKm != null && nearKm > 200
+        ? `<br>最近可观测带距发射场约 ${nearKm} km，发射场本地不处于 -13°~0°`
+        : '');
+  }
+}
+
 /* Leaflet 图层控制面板 */
 const baseMaps = { '高德地图': baseLayer };
 const overlayMaps = {
+  '太阳高度角 -13°~0° 可观测带': sunBandLayer,
   'RAMMB 卫星云图 (Himawari-9)': rammbLayer,
   '卫星云图 (NASA Terra)': satCloudLayer,
   '卫星云图 (NASA Aqua)': aquaCloudLayer,
@@ -4495,6 +4645,97 @@ function bearing(a, b) {
   return Math.atan2(y, x) * 180 / Math.PI;
 }
 
+// 方位角 → 罗盘文字（用于弹窗展示）
+function azimuthText(deg) {
+  const names = ['正北', '东北', '正东', '东南', '正南', '西南', '正西', '西北'];
+  return names[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+}
+
+/* === 射向判定 ===
+   顺序：① NOTAM 落区多边形/落区坐标 → ② NOTAM 方向描述 → ③ 轨道类型与发射场推断。
+   落区为退化点（与发射场重合）或“待定”时自动降级到下一级。 */
+const SITE_AZIMUTH = {
+  '文昌航天发射场': 100, '酒泉卫星发射中心': 190, '太原卫星发射中心': 190,
+  '西昌卫星发射中心': 104, '黄海海上发射平台': 100, '东海海上发射平台': 100,
+};
+const AZIMUTH_WORDS = [
+  [/东南|southeast/i, 135], [/东北|northeast/i, 45],
+  [/西南|southwest/i, 225], [/西北|northwest/i, 315],
+  [/正东|向东|以东/, 90], [/正南|向南|以南/, 180],
+  [/正西|向西|以西/, 270], [/正北|向北|以北/, 0],
+  [/东/, 90], [/南/, 180], [/西/, 270], [/北/, 0],
+];
+
+// 太阳同步轨道自发射场南行的方位角：sin A = cos(i) / cos(φ)，倾角取 97.4°
+function ssoAzimuth(latDeg) {
+  const s = Math.cos(97.4 * Math.PI / 180) / Math.cos(latDeg * Math.PI / 180);
+  const a = Math.asin(Math.max(-1, Math.min(1, s))) * 180 / Math.PI;
+  return (180 - a + 360) % 360;
+}
+
+function siteCoordsOf(t) {
+  if (Number.isFinite(t.site_lat) && Number.isFinite(t.site_lng)) return [t.site_lat, t.site_lng];
+  const site = launchSites.find(s => s.name === t.site);
+  return site ? site.coords : null;
+}
+
+function notamAzimuth(t) {
+  const site = siteCoordsOf(t);
+  const candidates = [];
+  (t.debris_polygons || []).forEach(poly => {
+    if (!Array.isArray(poly) || poly.length < 3) return;
+    const ring = poly.filter(p => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (ring.length < 3) return;
+    const lats = ring.map(p => p[0]), lngs = ring.map(p => p[1]);
+    const extent = Math.max(Math.max(...lats) - Math.min(...lats), Math.max(...lngs) - Math.min(...lngs));
+    if (extent < 0.05) return; // 退化点（与发射场重合），忽略
+    candidates.push([
+      ring.reduce((s, p) => s + p[0], 0) / ring.length,
+      ring.reduce((s, p) => s + p[1], 0) / ring.length,
+    ]);
+  });
+  if (Number.isFinite(t.debris_lat) && Number.isFinite(t.debris_lng) && site) {
+    if (haversineKm(site, [t.debris_lat, t.debris_lng]) > 30) {
+      candidates.push([t.debris_lat, t.debris_lng]);
+    }
+  }
+  if (site && candidates.length) {
+    const far = candidates.reduce((a, b) => (haversineKm(site, a) >= haversineKm(site, b) ? a : b));
+    return { deg: (bearing(site, far) + 360) % 360, source: 'NOTAM 落区' };
+  }
+  if (t.direction && !/待定|未知|tbd/i.test(t.direction)) {
+    for (const [re, deg] of AZIMUTH_WORDS) {
+      if (re.test(t.direction)) return { deg, source: 'NOTAM 方向' };
+    }
+  }
+  const text = `${t.code || ''} ${t.mission_type || ''} ${t.label || ''}`;
+  const lat = site ? site[0] : 0;
+  if (/载人|神舟|空间站|shenzhou|crew|human/i.test(text)) return { deg: 42, source: '轨道类型推断' };
+  if (/太阳同步|极轨|polar|\bsso\b|遥感|yaogan|侦察|测绘|资源|环境|气象/i.test(text)) {
+    return { deg: ssoAzimuth(lat), source: '轨道类型推断' };
+  }
+  if (/高轨|gto|geo|地球同步|通信|北斗|beidou|igso|中轨/i.test(text)) {
+    return { deg: t.site === '西昌卫星发射中心' ? 104 : 95, source: '轨道类型推断' };
+  }
+  if (/低倾角|星网|千帆|卫星互联网|商业/i.test(text)) return { deg: 100, source: '轨道类型推断' };
+  const bySite = SITE_AZIMUTH[t.site];
+  return bySite != null
+    ? { deg: bySite, source: '发射场常规推断' }
+    : { deg: 90, source: '默认估算' };
+}
+
+// 无 NOTAM 落区时，沿射向补一条 800 km 的地面航迹，避免只剩一个点
+function ensureDirectionalPath(t, dir) {
+  const site = siteCoordsOf(t);
+  if (!site || !dir) return;
+  const path = Array.isArray(t.path) ? t.path : [];
+  let length = 0;
+  for (let i = 1; i < path.length; i++) length += haversineKm(path[i - 1], path[i]);
+  if (length >= 30) return;
+  t.path = [0, 90, 190, 350, 560, 800].map(d => offsetPoint(site, dir.deg, d));
+  t.pathSynthetic = true;
+}
+
 function drawTrajectories(tasks, group) {
   tasks.forEach(t => {
     const isTwi = t.twilight;
@@ -4530,6 +4771,12 @@ function drawTrajectories(tasks, group) {
       });
     }
 
+    // 射向：NOTAM 落区优先，其次方向描述与轨道类型推断
+    const dirInfo = t.azimuth != null
+      ? { deg: t.azimuth, source: t.azimuthSource || 'NOTAM' }
+      : notamAzimuth(t);
+    const dirLine = `<span class="popup-detail">射向：${dirInfo.deg.toFixed(0)}°（${azimuthText(dirInfo.deg)}）· ${dirInfo.source}</span>`;
+
     // 航迹中心线——从发射场到落区中心
     // 已发射：细虚线；未发射：粗实线，确保从起点到落区完整可见
     const line = L.polyline(t.path, {
@@ -4546,7 +4793,8 @@ function drawTrajectories(tasks, group) {
       `<strong>${t.code}</strong>` +
       `<span class="popup-detail">${t.site}</span>` +
       `<span class="popup-detail">${t.label}</span>` +
-      `<span class="popup-detail" style="color:${lineColor}">航迹中心线（NOTAM 落区推演）</span>` +
+      dirLine +
+      `<span class="popup-detail" style="color:${lineColor}">${t.pathSynthetic ? '航迹中心线（无 NOTAM 落区，按射向推断）' : '航迹中心线（NOTAM 落区推演）'}</span>` +
       `<span class="popup-detail" style="color:${isTwi ? '#1E8449' : '#8a6110'}">${t.twilightDesc}</span>`
     );
 
@@ -4605,7 +4853,6 @@ function drawTrajectories(tasks, group) {
      600-1000km 超远距离(蓝) 晨昏暮光效应·发光尾迹
      1000-2000km 极远距离(紫) 高空云冠地平线余光（实测可拍到）
    ============================================ */
-const VIEW_RADIUS_KM = 2000;
 const CORRIDOR_HALF_WIDTH_KM = 250;
 
 // 火箭云典型高度（暮光效应 · 水母形态出现层）
@@ -4758,84 +5005,6 @@ function fmtBeijing(iso) {
   return `${p(bj.getUTCMonth() + 1)}-${p(bj.getUTCDate())} ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}`;
 }
 
-// 火箭飞行时间估算（秒）：按「距发射场地面距离」估算火箭飞越上空时刻。
-// 长征系列典型弹道：起飞约120秒爬到100km高度（此时地面水平距离约50km，而非100km）；
-// 之后弹道逐渐转平，地面投影速度约1.6km/s（合速度2.5~3km/s的水平分量）。
-function rocketFlightSec(distKm) {
-  if (distKm <= 50) return 120 * (distKm / 50);
-  return 120 + (distKm - 50) / 1.6;
-}
-
-// 火箭飞过"距发射场 distKm 处上空"的北京时间
-function fmtReachTime(iso, distKm) {
-  const t0 = new Date(iso).getTime();
-  const tReach = t0 + rocketFlightSec(distKm) * 1000;
-  return fmtBeijing(new Date(tReach).toISOString());
-}
-
-// 可拍摄窗口：火箭飞过该位置上空 → 尾迹云约可见15分钟
-function fmtShootWindowAt(iso, distKm) {
-  const t0 = new Date(iso).getTime();
-  const tReach = t0 + rocketFlightSec(distKm) * 1000;
-  const s = fmtBeijing(new Date(tReach).toISOString());
-  const e = fmtBeijing(new Date(tReach + 15 * 60000).toISOString());
-  return `${s} → ${e}`;
-}
-
-// 通用：绘制拍摄距离同心环（仅对存在晨昏任务的发射场）
-// 考虑观测者海拔：超出 altitude 可视距离的环被裁剪
-function drawShootingRings(tasks, group) {
-  const twSites = new Set(tasks.filter(t => t.twilight).map(t => t.site));
-  const maxVis = maxVisibleDistance(observerAltitude);
-  launchSites.forEach(site => {
-    if (!twSites.has(site.name)) return;
-    const baseColor = SITE_COLORS[site.name] || '#C0392B';
-    const reversed = [...SHOOTING_ZONES].reverse();
-    // 该发射场的晨昏任务（用于显示可拍摄时间）
-    const siteTasks = tasks.filter(t => t.twilight && t.site === site.name);
-    reversed.forEach((zone, i) => {
-      const prevMax = (i + 1 < reversed.length) ? reversed[i + 1].maxKm : 0;
-      // 极远距离区(1000-2000km)为"高空云冠地平线余光"，不受几何视距裁剪
-      const isHorizonGlow = (i === 0); // reversed[0] = 极远距离区
-      // 海拔裁剪：跳过完全超出可视距离的环（极远距离区除外）
-      if (!isHorizonGlow && prevMax > maxVis) return;
-      const effectiveMax = isHorizonGlow ? zone.maxKm : Math.min(zone.maxKm, maxVis);
-      // 圈代表距离：取该环区间中点，作为观测者大致位置
-      const repDist = (prevMax + effectiveMax) / 2;
-      const circle = L.circle(site.coords, {
-        radius: effectiveMax * 1000,
-        color: baseColor,
-        weight: 1,
-        opacity: 0.6,
-        dashArray: '3 4',
-        fillColor: zone.color,
-        fillOpacity: zone.fillOpacity,
-      });
-      group.addLayer(circle);
-      // 每个任务按该圈距离计算火箭飞过时刻，时间随距离递增而不同
-      const timeRows = siteTasks.map(t =>
-        `<span class="popup-detail" style="color:#1E8449">` +
-        `火箭飞过上空：${fmtReachTime(t.launchTime, repDist)}（发射 ${fmtBeijing(t.launchTime)}）` +
-        `</span>` +
-        `<span class="popup-detail" style="color:#1E8449">` +
-        `可拍摄窗口：${fmtShootWindowAt(t.launchTime, repDist)}` +
-        `</span>`
-      ).join('');
-      // 海拔裁剪提示
-      const altClipNote = (!isHorizonGlow && observerAltitude > 0 && zone.maxKm > maxVis)
-        ? `<span class="popup-detail" style="color:#7D3C98">⚠️ 海拔${observerAltitude}m 下，此环裁剪至 ${Math.round(maxVis)} km</span>`
-        : '';
-      circle.bindPopup(
-        `<strong>${site.name} · ${zone.name}</strong>` +
-        `<span class="popup-detail" style="color:${zone.color}">距发射场 ${prevMax}–${Math.round(effectiveMax)} km</span>` +
-        `<span class="popup-detail">拍摄效果：${zone.desc}</span>` +
-        altClipNote +
-        timeRows
-      );
-    });
-  });
-}
-
 // 通用：绘制尾迹云拍摄走廊（仅晨昏任务）
 function drawCorridors(tasks, group) {
   tasks.forEach(t => {
@@ -4885,13 +5054,14 @@ let focusedMissionId = null;
 function renderMissionSet(tasks, group) {
   group.clearLayers();
   const visible = focusedMissionId ? tasks.filter(t => t.code === focusedMissionId) : tasks;
-  drawShootingRings(visible, group);
   drawTrajectories(visible, group);
   drawCorridors(visible, group);
+  updateSunBand(visible);
 }
 
 renderMissionSet(trajectories, futureMissionGroup);
 renderMissionSet(historicalTrajectories, historyMissionGroup);
+updateSunBand(trajectories);
 
 // 从 /api/prediction 返回的数据动态更新未来任务航迹线
 // 将 next_launch + upcoming 列表转为 trajectories 格式，重绘地图
@@ -4904,6 +5074,15 @@ function updateTrajectoriesFromPrediction(data) {
     }
   }
   if (!items.length) return;
+
+  // 先按 NOTAM 落区确定射向（无落区时按方向描述 / 轨道类型推断），
+  // 再为没有落区的任务补一条沿射向的地面航迹
+  items.forEach(t => {
+    const dir = notamAzimuth(t);
+    t.azimuth = dir.deg;
+    t.azimuthSource = dir.source;
+    ensureDirectionalPath(t, dir);
+  });
 
   // 补充 diffDays 和 color 字段
   items.forEach(t => {
@@ -4943,8 +5122,8 @@ function setMissionFocus(code) {
   }
   if (hint) {
     hint.textContent = code
-      ? `聚焦 ${code} · 地图仅显示该任务范围`
-      : '聚焦后仅显示该任务航迹/环/走廊';
+      ? `聚焦 ${code} · 地图仅显示该任务射向与可观测带`
+      : '聚焦后按该任务射向显示可观测带';
   }
   // 重绘当前任务组
   applyCurrentMissionRender();
@@ -4980,16 +5159,21 @@ function applyCurrentMissionRender() {
   renderMissionSet(tasks, currentGroup);
 }
 
-// 缩放到单个任务范围（含拍摄环）
+// 缩放到单个任务的航迹范围
 function focusMapToTask(t) {
   if (!t || !t.path || t.path.length < 2) return;
   const site = launchSites.find(s => s.name === t.site);
   const bounds = L.latLngBounds(t.path.map(p => [p[0], p[1]]));
-  if (site && t.twilight) {
-    bounds.extend(offsetPoint(site.coords, 0, VIEW_RADIUS_KM));
-    bounds.extend(offsetPoint(site.coords, 90, VIEW_RADIUS_KM));
-    bounds.extend(offsetPoint(site.coords, 180, VIEW_RADIUS_KM));
-    bounds.extend(offsetPoint(site.coords, 270, VIEW_RADIUS_KM));
+  if (site) {
+    bounds.extend(offsetPoint(site.coords, 0, 300));
+    bounds.extend(offsetPoint(site.coords, 90, 300));
+    bounds.extend(offsetPoint(site.coords, 180, 300));
+    bounds.extend(offsetPoint(site.coords, 270, 300));
+    // 晨昏任务：视野同时覆盖最近的可观测带
+    if (t.twilight) {
+      const near = nearestBandPoint(missionTimes(t), site.coords);
+      if (near) bounds.extend(near);
+    }
   }
   map.fitBounds(bounds, { padding: [50, 50], duration: 0.8 });
 }
@@ -5020,7 +5204,7 @@ function refreshMissionFocusOptions() {
     sel.value = '';
     sel.classList.remove('focused');
     const hint = document.getElementById('focusHint');
-    if (hint) hint.textContent = '聚焦后仅显示该任务航迹/环/走廊';
+    if (hint) hint.textContent = '聚焦后按该任务射向显示可观测带';
   }
 }
 
@@ -5397,7 +5581,7 @@ function applyHistoryFilter() {
     const sel = document.getElementById('missionFocus');
     const hint = document.getElementById('focusHint');
     if (sel) { sel.value = ''; sel.classList.remove('focused'); }
-    if (hint) hint.textContent = '聚焦后仅显示该任务航迹/环/走廊';
+    if (hint) hint.textContent = '聚焦后按该任务射向显示可观测带';
   }
   const visible = focusedMissionId ? all.filter(t => t.code === focusedMissionId) : all;
   renderMissionSet(visible, historyMissionGroup);
@@ -5428,6 +5612,7 @@ function switchMission(mode) {
   if (mode === 'future') {
     map.removeLayer(historyMissionGroup);
     map.addLayer(futureMissionGroup);
+    updateSunBand(focusedMissionId ? trajectories.filter(t => t.code === focusedMissionId) : trajectories);
     if (filterBox) filterBox.classList.remove('visible');
     if (listBox) listBox.classList.remove('visible');
     renderFutureList();
