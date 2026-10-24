@@ -1035,6 +1035,17 @@ h1, h2, h3, h4 {
   border-color: var(--fg);
 }
 
+/* 暮光任务筛选（位于「未来/历史」切换下方） */
+.twilight-tabs {
+  margin-bottom: 0.55rem;
+}
+
+.twilight-tabs .mission-tab {
+  font-size: 0.66rem;
+  padding: 0.4rem 0.5rem;
+  letter-spacing: 0.04em;
+}
+
 .mission-hint {
   font-size: 0.75rem;
   color: var(--muted);
@@ -3060,7 +3071,7 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> 7-14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#2980B9"></span> &gt;14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#9A938A"></span> 已发射</span>
-      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 已接入 Launch Library 2 全球发射任务，仅显示满足该条件（-13°~0°）的场次 · 时间自动转换为你的本地时区，与北京时间不同时并列显示</span>
+      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 已接入 Launch Library 2 全球发射任务，默认显示全部获取到的任务，可用侧栏「仅暮光任务」筛选 · 时间自动转换为你的本地时区，与北京时间不同时并列显示</span>
       <span class="lg-note" style="color:var(--accent-soft)">实时卫星云图已独立为新板块（见下方），支持卫星影像 / 云层 / 降水 / 风场 / 温度多图层切换；右上角图层面板可叠加 NASA MODIS 卫星影像</span>
     </div>
 
@@ -3084,6 +3095,10 @@ h1, h2, h3, h4 {
         <div class="mission-tabs">
           <button class="mission-tab active" data-mode="future">未来任务</button>
           <button class="mission-tab" data-mode="history">历史任务</button>
+        </div>
+        <div class="mission-tabs twilight-tabs" id="twilightTabs" role="group" aria-label="任务筛选">
+          <button type="button" class="mission-tab active" data-twilight="all">全部任务</button>
+          <button type="button" class="mission-tab" data-twilight="twilight">仅暮光任务</button>
         </div>
         <div class="mission-hint" id="missionHint">当前：未来发射任务（共 2 个任务）</div>
         <div class="future-list" id="futureList"><div class="history-item future-item">
@@ -3671,7 +3686,7 @@ fetch(`${DATA_BASE_URL}/prediction.json`)
   .catch(err => {
     console.warn('预测数据加载失败，使用内嵌快照', err);
     renderPrediction(__PREDICTION_SNAPSHOT__);
-    loadGlobalTwilightTasks();
+    loadGlobalTasks();
   });
 
 /* ============================================
@@ -3760,7 +3775,8 @@ const historicalSightings = [
 const map = L.map('map', {
   center: [33.5, 108],
   zoom: 4,
-  scrollWheelZoom: false,
+  scrollWheelZoom: true,
+  worldCopyJump: true,
   zoomControl: true,
   attributionControl: false
 });
@@ -3773,12 +3789,28 @@ const map = L.map('map', {
    高德底图采用 GCJ-02（火星坐标系），与 WGS84 存在约 200-500m 偏移 */
 const AMAP_VEC = 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}';
 
-/* === 底图层 === */
-const baseLayer = L.tileLayer(AMAP_VEC, {
+/* Esri 全球底图：WGS84 / Web 墨卡托，无 GCJ-02 偏移，国内外均可访问 */
+const ESRI_STREET = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const ESRI_IMAGERY = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+/* === 底图层（默认 Esri 全球街道图，海外访问更稳定）=== */
+const esriStreetLayer = L.tileLayer(ESRI_STREET, {
+  maxZoom: 19,
+  attribution: '© Esri · OpenStreetMap',
+}).addTo(map);
+
+const esriImageryLayer = L.tileLayer(ESRI_IMAGERY, {
+  maxZoom: 19,
+  attribution: '© Esri',
+});
+
+const amapLayer = L.tileLayer(AMAP_VEC, {
   maxZoom: 18,
   subdomains: '1234',
   attribution: '© 高德地图',
-}).addTo(map);
+});
+
+const baseLayer = esriStreetLayer;
 
 /* === RAMMB Himawari 卫星云图叠加层 === */
 /* SLIDER 瓦片 URL: /data/imagery/{YYYY/MM/DD}/himawari---full_disk/geocolor/{ts}/{zz}/{yyy}_{xxx}.png */
@@ -3888,10 +3920,9 @@ rammbLayer.getTileUrl = function(coords) {
   return rammbTileUrl(coords.z, coords.x, coords.y);
 };
 
-/* 初始化: 获取时间戳后添加到地图并刷新 */
+/* 初始化: 获取时间戳（默认不自动叠加，避免夜间半球的黑色影像遮挡底图；可在图层面板手动开启） */
 fetchRammbTimestamp().then(() => {
-  if (rammbTimestamp) {
-    rammbLayer.addTo(map);
+  if (rammbTimestamp && map.hasLayer(rammbLayer)) {
     rammbLayer.redraw();
   }
 });
@@ -4161,7 +4192,11 @@ function updateSunBand(tasks) {
 }
 
 /* Leaflet 图层控制面板 */
-const baseMaps = { '高德地图': baseLayer };
+const baseMaps = {
+  '全球街道图 (Esri)': esriStreetLayer,
+  '全球卫星影像 (Esri)': esriImageryLayer,
+  '高德地图（中国境内）': amapLayer,
+};
 const overlayMaps = {
   '太阳高度角 -13°~0° 可观测带': sunBandLayer,
   'RAMMB 卫星云图 (Himawari-9)': rammbLayer,
@@ -5086,11 +5121,40 @@ const historyMissionGroup = L.layerGroup();
 let currentMissionMode = 'future';
 const historyFilter = { site: 'all', twilight: 'all' };
 let focusedMissionId = null;
+// 未来任务筛选：false = 全部任务，true = 仅暮光任务
+let twilightOnly = false;
+
+function applyTwilightFilter(tasks) {
+  return twilightOnly ? tasks.filter(t => t.twilight) : tasks;
+}
+
+// 统一更新侧栏任务统计提示
+function updateMissionHint() {
+  const hint = document.getElementById('missionHint');
+  if (!hint) return;
+  const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
+  if (currentMissionMode === 'future') {
+    const shown = applyTwilightFilter(futureTasksWithin(FUTURE_WINDOW_DAYS));
+    const globalN = shown.filter(t => t.isGlobal).length;
+    hint.textContent = focusedMissionId
+      ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${shown.length} 个）${altSuffix}`
+      : `当前：${twilightOnly ? '仅暮光任务' : '全部未来任务'}（共 ${shown.length} 个，其中全球 ${globalN} 个）${altSuffix}`;
+  } else {
+    const all = filteredHistoryTasks();
+    const tw = all.filter(t => t.twilight).length;
+    hint.textContent = focusedMissionId
+      ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${all.length} 个）${altSuffix}`
+      : `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
+  }
+}
 
 // 渲染一组任务的全部图层（若 focusedMissionId 有值则只渲染该任务）
 function renderMissionSet(tasks, group) {
   group.clearLayers();
-  const visible = focusedMissionId ? tasks.filter(t => t.code === focusedMissionId) : tasks;
+  let visible = focusedMissionId ? tasks.filter(t => t.code === focusedMissionId) : tasks;
+  if (group === futureMissionGroup && !focusedMissionId && twilightOnly) {
+    visible = visible.filter(t => t.twilight);
+  }
   drawTrajectories(visible, group);
   drawCorridors(visible, group);
   updateSunBand(visible);
@@ -5104,11 +5168,6 @@ updateSunBand(trajectories);
 // 将 next_launch + upcoming 列表转为 trajectories 格式，重绘地图
 let localMissionItems = [];
 let globalMissionItems = [];
-
-function futureGlobalCount() {
-  const now = Date.now();
-  return globalMissionItems.filter(t => new Date(t.launchTime).getTime() >= now).length;
-}
 
 function rebuildFutureTrajectories() {
   const items = [...localMissionItems, ...globalMissionItems];
@@ -5138,15 +5197,7 @@ function rebuildFutureTrajectories() {
     renderMissionSet(trajectories, futureMissionGroup);
     renderFutureList();
     refreshMissionFocusOptions();
-    const hint = document.getElementById('missionHint');
-    if (hint) {
-      const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
-      const globalFuture = futureGlobalCount();
-      const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-      hint.textContent = focusedMissionId
-        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
-        : `当前：未来发射任务（共 ${n} 个，含 ${globalFuture} 个全球暮光任务）${altSuffix}`;
-    }
+    updateMissionHint();
   }
 }
 
@@ -5159,7 +5210,7 @@ function updateTrajectoriesFromPrediction(data) {
     }
   }
   if (!items.length) {
-    loadGlobalTwilightTasks();
+    loadGlobalTasks();
     return;
   }
 
@@ -5167,16 +5218,17 @@ function updateTrajectoriesFromPrediction(data) {
   rebuildFutureTrajectories();
   console.log(`[预测] 已加载 ${items.length} 个未来发射任务航迹线`);
 
-  // 接入全球发射任务：只保留发射时刻太阳高度角处于 -13°~0° 的场次
-  loadGlobalTwilightTasks();
+  // 接入全球发射任务（含暮光标记，默认全部显示）
+  loadGlobalTasks();
 }
 
 /* === 全球发射任务（Launch Library 2） ===
-   只保留未来 120 天（含最近 7 天已发射）内、时间精确到小时以内、
-   且发射时刻发射场太阳高度角处于 -13°~0° 的非中国任务（即满足火箭云条件）。
+   取未来 120 天（含最近 7 天已发射）内、时间精确到小时以内的非中国任务，
+   逐条计算发射时刻发射场太阳高度角并标记 twilight；
+   默认显示全部任务，侧栏「仅暮光任务」按 twilight 筛选。
    中国任务由 NOTAM 数据源提供，避免重复。 */
 const LL2_URL = 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=50&mode=detailed';
-const LL2_CACHE_KEY = 'hjqy_ll2_twilight_v1';
+const LL2_CACHE_KEY = 'hjqy_ll2_tasks_v2';
 const LL2_CACHE_TTL = 6 * 3600e3;
 const LL2_MAX_DAYS = 120;
 const LL2_PAST_DAYS = 7;
@@ -5195,13 +5247,14 @@ function ll2ToTask(r) {
   // 时间精度不足（仅到日/月/年）时无法判断发射时刻太阳高度角
   if (!/^(Second|Minute|Hour)$/.test((r.net_precision || {}).name || '')) return null;
   const alt = sunAltitudeAt(lat, lng, launch);
-  if (alt < -13 || alt > 0) return null;
+  const twilight = alt >= -13 && alt <= 0;
   const orbit = (r.mission || {}).orbit || {};
   const rocket = (r.rocket || {}).configuration || {};
   const provider = (r.launch_service_provider || {}).name || '';
   const rocketName = rocket.name || '';
+  const shortName = (r.name || '').split('|').pop().trim() || r.name;
   return {
-    code: r.name,
+    code: shortName,
     site: (pad.location || {}).name || pad.name || '未知发射场',
     site_lat: lat,
     site_lng: lng,
@@ -5212,15 +5265,16 @@ function ll2ToTask(r) {
     window_end: r.window_end || net,
     path: null,
     sunAlt: alt,
-    twilight: true,
-    twilightDesc: `${days < 0 ? '已发射 · ' : ''}发射时刻太阳高度角 ${alt.toFixed(1)}° · 处于 -13°~0° 可观测区间`,
+    twilight,
+    twilightDesc: `${days < 0 ? '已发射 · ' : ''}发射时刻太阳高度角 ${alt.toFixed(1)}°`
+      + (twilight ? ' · 处于 -13°~0° 可观测区间' : ' · 不在 -13°~0°，无法形成可见火箭云'),
     status: /go/i.test((r.status || {}).abbrev || '') ? 'go' : 'tbd',
     source: 'Launch Library 2',
     isGlobal: true,
   };
 }
 
-async function loadGlobalTwilightTasks() {
+async function loadGlobalTasks() {
   let items = null;
   try {
     const cached = JSON.parse(localStorage.getItem(LL2_CACHE_KEY) || 'null');
@@ -5246,7 +5300,8 @@ async function loadGlobalTwilightTasks() {
 
   globalMissionItems = items;
   rebuildFutureTrajectories();
-  console.log(`[全球] 满足火箭云条件的任务 ${items.length} 个`,
+  const tw = items.filter(t => t.twilight).length;
+  console.log(`[全球] 已加载 ${items.length} 个任务（其中暮光 ${tw} 个）`,
     items.map(t => `${t.code}@${t.site}(${t.launchTime})`).join(' | '));
 }
 
@@ -5273,22 +5328,7 @@ function setMissionFocus(code) {
     if (t) focusMapToTask(t);
   }
   // 同步顶部任务状态提示
-  const mh = document.getElementById('missionHint');
-  if (mh) {
-    const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-    if (currentMissionMode === 'future') {
-      const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
-      mh.textContent = focusedMissionId
-        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
-        : `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
-    } else {
-      const all = filteredHistoryTasks();
-      const tw = all.filter(t => t.twilight).length;
-      mh.textContent = focusedMissionId
-        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${all.length} 个）${altSuffix}`
-        : `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
-    }
-  }
+  updateMissionHint();
 }
 
 // 根据当前模式重绘任务组
@@ -5321,7 +5361,9 @@ function focusMapToTask(t) {
 function refreshMissionFocusOptions() {
   const sel = document.getElementById('missionFocus');
   if (!sel) return;
-  const tasks = currentMissionMode === 'future' ? futureTasksWithin(FUTURE_WINDOW_DAYS) : filteredHistoryTasks();
+  const tasks = currentMissionMode === 'future'
+    ? applyTwilightFilter(futureTasksWithin(FUTURE_WINDOW_DAYS))
+    : filteredHistoryTasks();
   const currentVal = focusedMissionId;
   sel.innerHTML = '<option value="">全部任务</option>';
   tasks.forEach(t => {
@@ -5410,12 +5452,12 @@ function futureTasksWithin(days) {
 function renderFutureList() {
   const list = document.getElementById('futureList');
   if (!list) return;
-  const tasks = futureTasksWithin(FUTURE_WINDOW_DAYS);
+  const tasks = applyTwilightFilter(futureTasksWithin(FUTURE_WINDOW_DAYS));
   list.innerHTML = '';
   if (tasks.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'hi-empty';
-    empty.textContent = `暂无确认发射任务`;
+    empty.textContent = twilightOnly ? '暂无满足 -13°~0° 的暮光任务' : '暂无确认发射任务';
     list.appendChild(empty);
     return;
   }
@@ -5453,6 +5495,14 @@ function renderFutureList() {
       const site = launchSites.find(s => s.name === t.site);
       if (site && site.observations.length) {
         renderParamsPanel(site.observations[0], site);
+      }
+      // 地图不在可视区域内时自动滚动到地图（移动端优先）
+      const atlasMap = document.getElementById('atlasMap');
+      if (atlasMap) {
+        const r = atlasMap.getBoundingClientRect();
+        if (r.top < 0 || r.bottom > window.innerHeight) {
+          atlasMap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
     });
     list.appendChild(item);
@@ -5725,20 +5775,8 @@ function applyHistoryFilter() {
   const visible = focusedMissionId ? all.filter(t => t.code === focusedMissionId) : all;
   renderMissionSet(visible, historyMissionGroup);
   renderHistoryList(all);
-  const hint = document.getElementById('missionHint');
-  // 海拔提示后缀
-  const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-
-  if (hint) {
-    if (focusedMissionId) {
-      const sel = all.find(t => t.code === focusedMissionId);
-      hint.textContent = `已聚焦：${sel ? sel.code : ''}（再次点击恢复全部 ${all.length} 个）${altSuffix}`;
-    } else {
-      const tw = all.filter(t => t.twilight).length;
-      hint.textContent = `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
-    }
-  }
   refreshMissionFocusOptions();
+  updateMissionHint();
 }
 
 function switchMission(mode) {
@@ -5747,18 +5785,18 @@ function switchMission(mode) {
   const filterBox = document.getElementById('historyFilter');
   const listBox = document.getElementById('historyList');
   const futureBox = document.getElementById('futureList');
-  const hint = document.getElementById('missionHint');
+  const twilightTabs = document.getElementById('twilightTabs');
   if (mode === 'future') {
     map.removeLayer(historyMissionGroup);
     map.addLayer(futureMissionGroup);
-    updateSunBand(focusedMissionId ? trajectories.filter(t => t.code === focusedMissionId) : trajectories);
+    updateSunBand(focusedMissionId
+      ? trajectories.filter(t => t.code === focusedMissionId)
+      : applyTwilightFilter(trajectories));
     if (filterBox) filterBox.classList.remove('visible');
     if (listBox) listBox.classList.remove('visible');
     renderFutureList();
     if (futureBox) futureBox.classList.remove('hidden');
-    const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
-    const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-    if (hint) hint.textContent = `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
+    if (twilightTabs) twilightTabs.style.display = '';
   } else {
     map.removeLayer(futureMissionGroup);
     applyHistoryFilter();
@@ -5766,26 +5804,40 @@ function switchMission(mode) {
     if (filterBox) filterBox.classList.add('visible');
     if (listBox) listBox.classList.add('visible');
     if (futureBox) futureBox.classList.add('hidden');
+    if (twilightTabs) twilightTabs.style.display = 'none';
   }
-  document.querySelectorAll('.mission-tab').forEach(b => {
+  document.querySelectorAll('.mission-tab[data-mode]').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
   refreshMissionFocusOptions();
+  updateMissionHint();
 }
 
 // 绑定切换按钮（用 addEventListener 而非内联 onclick，规避 CSP 限制）
-document.querySelectorAll('.mission-tab').forEach(btn => {
+document.querySelectorAll('.mission-tab[data-mode]').forEach(btn => {
   btn.addEventListener('click', () => switchMission(btn.dataset.mode));
 });
 
+// 暮光任务筛选：全部任务 / 仅暮光任务
+const twilightTabs = document.getElementById('twilightTabs');
+if (twilightTabs) {
+  twilightTabs.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      twilightOnly = btn.dataset.twilight === 'twilight';
+      twilightTabs.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+      renderMissionSet(trajectories, futureMissionGroup);
+      renderFutureList();
+      refreshMissionFocusOptions();
+      updateMissionHint();
+    });
+  });
+}
+
 // 初始渲染未来任务列表 + 提示文字
 renderFutureList();
-(function () {
-  const hint = document.getElementById('missionHint');
-  const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
-  const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-  if (hint) hint.textContent = `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
-})();
+updateMissionHint();
 
 // Windy 卫星云图图层切换
 document.querySelectorAll('.windy-btn').forEach(btn => {
@@ -5830,22 +5882,7 @@ function onAltitudeChange(val) {
   renderScorePanel();
   renderReviewPanel();
   // 更新提示文字
-  const hint = document.getElementById('missionHint');
-  if (hint) {
-    const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-    if (currentMissionMode === 'future') {
-      const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
-      hint.textContent = focusedMissionId
-        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
-        : `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
-    } else {
-      const all = filteredHistoryTasks();
-      const tw = all.filter(t => t.twilight).length;
-      hint.textContent = focusedMissionId
-        ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${all.length} 个）${altSuffix}`
-        : `当前：历史发射任务（${all.length} 个，含 ${tw} 个晨昏案例）${altSuffix}`;
-    }
-  }
+  updateMissionHint();
 }
 if (altSlider) {
   altSlider.addEventListener('input', e => onAltitudeChange(parseFloat(e.target.value) || 0));
