@@ -85,6 +85,7 @@ body.locked > *:not(#gate):not(script) { display: none !important; }
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   pointer-events: auto;
+  cursor: pointer;
   transition: opacity .3s ease, transform .3s ease;
 }
 .data-stamp .dot {
@@ -3604,7 +3605,9 @@ function renderPrediction(data) {
         : `<span class="unit">T-</span>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     };
     updateNextCountdown();
-    setInterval(updateNextCountdown, 1000);
+    // 重新渲染时先清掉旧计时器，避免重复叠加
+    if (window.__nextCountdownTimer) clearInterval(window.__nextCountdownTimer);
+    window.__nextCountdownTimer = setInterval(updateNextCountdown, 1000);
   }
 
   // 后续发射卡片
@@ -3675,22 +3678,41 @@ const __PREDICTION_SNAPSHOT__ = {
   ]
 };
 
-fetch(`${DATA_BASE_URL}/prediction.json`)
-  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(data => {
-    if (data && data.next_launch) {
+// 预测数据加载：首次加载 + 每 10 分钟自动检查更新（数据仓库由 Actions 定时抓取）
+let lastPredictionStamp = null;
+
+function loadPredictionData(isFirst) {
+  return fetch(`${DATA_BASE_URL}/prediction.json?t=${Date.now()}`, { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+      if (!data || !data.next_launch) throw new Error('空数据');
+      const stamp = data.fetched_at || '';
+      // 时间戳未变化时不重复渲染，避免打断聚焦与列表状态
+      if (!isFirst && stamp && stamp === lastPredictionStamp) return;
+      lastPredictionStamp = stamp;
       renderPrediction(data);
       // 动态更新未来任务航迹线（从 API 数据构建 trajectories）
       updateTrajectoriesFromPrediction(data);
-    } else {
-      throw new Error('空数据');
-    }
-  })
-  .catch(err => {
-    console.warn('预测数据加载失败，使用内嵌快照', err);
-    renderPrediction(__PREDICTION_SNAPSHOT__);
-    loadGlobalTasks();
-  });
+    })
+    .catch(err => {
+      if (lastPredictionStamp) {
+        console.warn('预测数据刷新失败，保留当前数据', err);
+        return;
+      }
+      console.warn('预测数据加载失败，使用内嵌快照', err);
+      renderPrediction(__PREDICTION_SNAPSHOT__);
+      loadGlobalTasks();
+    });
+}
+
+loadPredictionData(true);
+setInterval(() => loadPredictionData(false), 10 * 60 * 1000);
+
+// 手动刷新（点击数据角标触发）
+window.__refreshData = function () {
+  loadPredictionData(true);
+  loadGlobalTasks(true);
+};
 
 /* ============================================
    MAP
@@ -5263,7 +5285,7 @@ function updateTrajectoriesFromPrediction(data) {
    中国任务由 NOTAM 数据源提供，避免重复。 */
 const LL2_URL = 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=50&mode=detailed';
 const LL2_CACHE_KEY = 'hjqy_ll2_tasks_v2';
-const LL2_CACHE_TTL = 6 * 3600e3;
+const LL2_CACHE_TTL = 1 * 3600e3;  // 1 小时：全球任务变动频繁，缓存不宜过久
 const LL2_MAX_DAYS = 120;
 const LL2_PAST_DAYS = 7;
 
@@ -5308,11 +5330,11 @@ function ll2ToTask(r) {
   };
 }
 
-async function loadGlobalTasks() {
+async function loadGlobalTasks(force) {
   let items = null;
   try {
     const cached = JSON.parse(localStorage.getItem(LL2_CACHE_KEY) || 'null');
-    if (cached && Array.isArray(cached.items) && Date.now() - cached.ts < LL2_CACHE_TTL) {
+    if (!force && cached && Array.isArray(cached.items) && Date.now() - cached.ts < LL2_CACHE_TTL) {
       items = cached.items;
     }
   } catch (e) { /* 缓存不可用时直接请求 */ }
@@ -5338,6 +5360,9 @@ async function loadGlobalTasks() {
   console.log(`[全球] 已加载 ${items.length} 个任务（其中暮光 ${tw} 个）`,
     items.map(t => `${t.code}@${t.site}(${t.launchTime})`).join(' | '));
 }
+
+// 全球任务每 30 分钟检查一次（缓存 1 小时，过期后才会真正请求）
+setInterval(() => loadGlobalTasks(), 30 * 60 * 1000);
 
 // 聚焦/取消聚焦某个任务
 function setMissionFocus(code) {
@@ -6979,32 +7004,48 @@ window.addEventListener('scroll', () => {
 (function(){
   var stamp = document.getElementById('dataStamp');
   var text = document.getElementById('stampText');
+  var lastOk = false;
   function pad(n){ return String(n).padStart(2, '0'); }
   function fmt(iso){
     var d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
+  function ago(min){
+    if (min < 1) return '刚刚';
+    if (min < 60) return Math.round(min) + ' 分钟前';
+    return (min / 60).toFixed(min < 600 ? 1 : 0) + ' 小时前';
+  }
   function setState(cls, html){
     stamp.className = 'data-stamp' + (cls ? ' ' + cls : '');
     text.innerHTML = html;
     stamp.style.display = 'flex';
   }
-  fetch('https://uwuyou.github.io/huojianyun-data/data/status.json', { cache: 'no-store' })
-    .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(s){
-      if (!s || !s.last_success) throw new Error('无时间戳');
-      var t = new Date(s.last_success);
-      var ageMin = (Date.now() - t.getTime()) / 60000;
-      var cls = ageMin > 180 ? 'stale' : '';
-      var src = s.source ? s.source.replace(' NOTAM', '') : '';
-      var extra = (s.upcoming_count != null ? ' · 即将 ' + s.upcoming_count : '');
-      setState(cls, '数据更新 <b>' + fmt(s.last_success) + '</b>' + (src ? ' · ' + src : '') + extra);
-      if (cls) text.innerHTML += ' · 已延迟';
-    })
-    .catch(function(){
-      setState('error', '数据更新 <b>获取失败</b>');
-    });
+  function refresh(){
+    fetch('https://uwuyou.github.io/huojianyun-data/data/status.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(s){
+        if (!s || !s.last_success) throw new Error('无时间戳');
+        lastOk = true;
+        var ageMin = (Date.now() - new Date(s.last_success).getTime()) / 60000;
+        // 数据源由 Actions 定时同步，实际间隔 3~5 小时，超过 5 小时才判定为延迟
+        var cls = ageMin > 300 ? 'stale' : '';
+        var src = s.source ? s.source.replace(' NOTAM', '') : '';
+        var extra = (s.upcoming_count != null ? ' · 即将 ' + s.upcoming_count : '');
+        setState(cls, '数据更新 <b>' + fmt(s.last_success) + '</b> · ' + ago(ageMin)
+          + (src ? ' · ' + src : '') + extra + (cls ? ' · 已延迟' : ''));
+      })
+      .catch(function(){
+        if (!lastOk) setState('error', '数据更新 <b>获取失败</b>');
+      });
+  }
+  stamp.title = '点击立即刷新数据';
+  stamp.addEventListener('click', function(){
+    refresh();
+    if (window.__refreshData) window.__refreshData();
+  });
+  refresh();
+  setInterval(refresh, 3 * 60 * 1000);
 })();
 </script>
 
