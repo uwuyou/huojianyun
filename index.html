@@ -1828,20 +1828,6 @@ h1, h2, h3, h4 {
   border-top: 1px dashed var(--line-strong);
 }
 
-/* 太阳高度角 -13°~0° 可见带说明 */
-.sun-band-cap {
-  max-width: min(340px, calc(100vw - 48px));
-  padding: 0.5rem 0.65rem;
-  background: rgba(15, 14, 12, 0.88);
-  color: #F5F2EC;
-  border: 1px solid rgba(245, 242, 236, 0.22);
-  border-radius: 3px;
-  font-size: 0.68rem;
-  line-height: 1.55;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-}
-.sun-band-cap b { color: #7BD8A6; letter-spacing: 0.02em; }
-
 /* 发射场名永久标签 */
 .site-label {
   background: rgba(15, 14, 12, 0.82) !important;
@@ -4206,15 +4192,6 @@ function nearestBandPoint(times, site) {
   return best;
 }
 
-const sunBandCap = L.control({ position: 'bottomleft' });
-sunBandCap.onAdd = () => {
-  const div = L.DomUtil.create('div', 'sun-band-cap');
-  div.id = 'sunBandCap';
-  div.style.display = 'none';
-  return div;
-};
-sunBandCap.addTo(map);
-
 function updateSunBand(tasks) {
   const list = tasks || [];
   const focus = focusedMissionId ? list.find((t) => t.code === focusedMissionId) : null;
@@ -4225,27 +4202,12 @@ function updateSunBand(tasks) {
   if (key === sunBandKey) return;
   sunBandKey = key;
   sunBandLayer.clearLayers();
-  const cap = document.getElementById('sunBandCap');
-  if (!target) {
-    if (cap) cap.style.display = 'none';
-    return;
-  }
+  if (!target) return;
   const times = missionTimes(target);
   const canvas = buildSunBandCanvas(times);
   L.imageOverlay(canvas.toDataURL('image/png'), BAND_BOUNDS, {
     opacity: 1, interactive: false, pane: 'overlayPane',
   }).addTo(sunBandLayer);
-  if (cap) {
-    const site = siteCoordsOf(target);
-    const near = nearestBandPoint(times, site);
-    const nearKm = near && site ? Math.round(haversineKm(site, near)) : null;
-    cap.style.display = '';
-    cap.innerHTML = `<b>太阳高度角 -13°~0°</b> · ${target.code} · ${fmtTime(times[1].toISOString())}<br>`
-      + `绿色 -13°~-6°：天空较暗，火箭云清晰　红色 -6°~0°：天空较亮，对比度较低`
-      + (nearKm != null && nearKm > 200
-        ? `<br>最近可观测带距发射场约 ${nearKm} km，发射场本地不处于 -13°~0°`
-        : '');
-  }
 }
 
 /* Leaflet 图层控制面板 */
@@ -5485,18 +5447,27 @@ function renderHistoryList(tasks) {
   }
   tasks.forEach(t => {
     const morph = predictMorphology(t);
+    const chase = chaseVerdict(t);
+    // 时段标签：晨昏 / 夜间 / 白天，与判定文案保持一致
+    const phaseBadge = t.twilight
+      ? '<span class="hi-badge">晨昏</span>'
+      : `<span class="hi-badge hi-day">${Number.isFinite(t.sunAlt) && t.sunAlt < -18 ? '夜间' : '白天'}</span>`;
     const item = document.createElement('div');
     item.className = 'history-item' + (focusedMissionId === t.code ? ' active' : '');
     item.innerHTML = `
       <div class="hi-head">
         <span class="hi-code">${t.code}</span>
         <span style="display:flex;gap:0.35rem;align-items:center">
-          ${t.twilight ? '<span class="hi-badge">晨昏</span>' : '<span class="hi-badge hi-day">白天</span>'}
+          ${phaseBadge}
           <span class="morph-badge ${morph.cls}">${morph.name}</span>
         </span>
       </div>
       <div class="hi-meta">${t.label}</div>
       <div class="hi-meta" style="color:var(--accent-soft)">${morph.desc}</div>
+      <div class="chase-line">
+        <span class="chase-tag ${chase.cls}">${chase.level}</span>
+        <span class="chase-why">${chase.text}</span>
+      </div>
     `;
     item.addEventListener('click', () => {
       // 点击已聚焦任务：取消聚焦，恢复全部；否则聚焦该任务
