@@ -3062,7 +3062,7 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-dot-gold"></span> 历史观测</span>
       <span class="lg-label">太阳高度角（发射时刻）</span>
       <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> -13°~-6° · 天空较暗，火箭云清晰</span>
-      <span class="lg-item"><span class="lg-zone" style="background:#8E44AD"></span> -6°~0° · 天空较亮，对比度较低</span>
+      <span class="lg-item"><span class="lg-zone" style="background:#C0392B"></span> -6°~0° · 天空较亮，对比度较低</span>
       <span class="lg-sep"></span>
       <span class="lg-label">发射任务 · 按时间远近</span>
       <span class="lg-item"><span class="lg-zone" style="background:#E74C3C"></span> 即将发射(&lt;1天)</span>
@@ -4058,7 +4058,7 @@ setInterval(refreshTwilight, 600000);
    因此二维地图不再绘制整圈“观测范围”，只绘制发射窗口内太阳高度角处于
    -13°~0° 的区域：
        -13°~-6° 天空较暗，尾迹明亮清晰（绿）
-        -6°~0°  天空较亮，对比度较低（紫）
+        -6°~0°  天空较亮，对比度较低（红）
    该区域按发射时刻计算，时间窗内取并集；图像按 Web 墨卡托投影逐像素生成，
    与底图瓦片严格对齐。 */
 const BAND_BOUNDS = [[-85.0511, -180], [85.0511, 180]];
@@ -4156,7 +4156,7 @@ function buildSunBandCanvas(times) {
       }
       const i = (r * W + c) * 4;
       if (dark) { data[i] = 39; data[i + 1] = 174; data[i + 2] = 96; data[i + 3] = 92; }
-      else if (lit) { data[i] = 142; data[i + 1] = 68; data[i + 2] = 173; data[i + 3] = 70; }
+      else if (lit) { data[i] = 192; data[i + 1] = 57; data[i + 2] = 43; data[i + 3] = 78; }
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -4224,7 +4224,7 @@ function updateSunBand(tasks) {
     const nearKm = near && site ? Math.round(haversineKm(site, near)) : null;
     cap.style.display = '';
     cap.innerHTML = `<b>太阳高度角 -13°~0°</b> · ${target.code} · ${fmtTime(times[1].toISOString())}<br>`
-      + `绿色 -13°~-6°：天空较暗，火箭云清晰　紫色 -6°~0°：天空较亮，对比度较低`
+      + `绿色 -13°~-6°：天空较暗，火箭云清晰　红色 -6°~0°：天空较亮，对比度较低`
       + (nearKm != null && nearKm > 200
         ? `<br>最近可观测带距发射场约 ${nearKm} km，发射场本地不处于 -13°~0°`
         : '');
