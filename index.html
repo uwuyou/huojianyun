@@ -3040,7 +3040,7 @@ h1, h2, h3, h4 {
     <div class="section-header reveal visible">
       <span class="section-number">05 — Atlas</span>
       <h2 class="section-title">观测地图</h2>
-      <p class="section-subtitle">发射方向判定与太阳高度角 -13°~0° 的可观测范围</p>
+      <p class="section-subtitle">发射方向判定与太阳高度角 -13°~0° 的可观测范围（含全球任务）</p>
     </div>
 
     <div class="map-legend reveal visible">
@@ -3060,7 +3060,7 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> 7-14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#2980B9"></span> &gt;14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#9A938A"></span> 已发射</span>
-      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围不再绘制整圈距离环，只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 侧边栏可切换「历史任务」验证拍摄位置</span>
+      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 已接入 Launch Library 2 全球发射任务，仅显示满足该条件（-13°~0°）的场次 · 时间自动转换为你的本地时区，与北京时间不同时并列显示</span>
       <span class="lg-note" style="color:var(--accent-soft)">实时卫星云图已独立为新板块（见下方），支持卫星影像 / 云层 / 降水 / 风场 / 温度多图层切换；右上角图层面板可叠加 NASA MODIS 卫星影像</span>
     </div>
 
@@ -3541,14 +3541,7 @@ setInterval(updateCountdowns, 60000);
    PREDICTION (NOTAM 实时预测)
    ============================================ */
 function fmtWindow(startIso, endIso) {
-  const s = new Date(startIso);
-  const e = new Date(endIso);
-  const fmt = (d) => {
-    const bj = new Date(d.getTime() + 8 * 3600 * 1000);
-    const p = (n) => String(n).padStart(2, '0');
-    return `${p(bj.getUTCMonth() + 1)}-${p(bj.getUTCDate())} ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}`;
-  };
-  return `${fmt(s)} → ${fmt(e)}`;
+  return `${fmtTime(startIso)} → ${fmtTime(endIso)}`;
 }
 
 function renderSpotRow(spots) {
@@ -3563,7 +3556,7 @@ function renderSpotRow(spots) {
 
 function renderPrediction(data) {
   if (!data) return;
-  document.getElementById('predFetched').textContent = `${data.fetched_at || ''} · ${data.source || ''}`;
+  document.getElementById('predFetched').textContent = `${fmtTime(data.fetched_at)} · ${data.source || ''}`;
 
   const next = data.next_launch;
   if (next) {
@@ -3678,6 +3671,7 @@ fetch(`${DATA_BASE_URL}/prediction.json`)
   .catch(err => {
     console.warn('预测数据加载失败，使用内嵌快照', err);
     renderPrediction(__PREDICTION_SNAPSHOT__);
+    loadGlobalTwilightTasks();
   });
 
 /* ============================================
@@ -4158,7 +4152,7 @@ function updateSunBand(tasks) {
     const near = nearestBandPoint(times, site);
     const nearKm = near && site ? Math.round(haversineKm(site, near)) : null;
     cap.style.display = '';
-    cap.innerHTML = `<b>太阳高度角 -13°~0°</b> · ${target.code} · ${fmtBeijing(times[1].toISOString())}（北京时间）<br>`
+    cap.innerHTML = `<b>太阳高度角 -13°~0°</b> · ${target.code} · ${fmtTime(times[1].toISOString())}<br>`
       + `绿色 -13°~-6°：天空较暗，火箭云清晰　紫色 -6°~0°：天空较亮，对比度较低`
       + (nearKm != null && nearKm > 200
         ? `<br>最近可观测带距发射场约 ${nearKm} km，发射场本地不处于 -13°~0°`
@@ -4710,14 +4704,14 @@ function notamAzimuth(t) {
   }
   const text = `${t.code || ''} ${t.mission_type || ''} ${t.label || ''}`;
   const lat = site ? site[0] : 0;
-  if (/载人|神舟|空间站|shenzhou|crew|human/i.test(text)) return { deg: 42, source: '轨道类型推断' };
-  if (/太阳同步|极轨|polar|\bsso\b|遥感|yaogan|侦察|测绘|资源|环境|气象/i.test(text)) {
+  if (/载人|神舟|空间站|shenzhou|crew|human|gaganyaan/i.test(text)) return { deg: 42, source: '轨道类型推断' };
+  if (/太阳同步|极轨|polar|\bsso\b|sun-synchronous|遥感|yaogan|侦察|测绘|资源|环境|气象/i.test(text)) {
     return { deg: ssoAzimuth(lat), source: '轨道类型推断' };
   }
-  if (/高轨|gto|geo|地球同步|通信|北斗|beidou|igso|中轨/i.test(text)) {
+  if (/高轨|gto|geo|geostationary|geosynchronous|地球同步|通信|北斗|beidou|igso|中轨|meo/i.test(text)) {
     return { deg: t.site === '西昌卫星发射中心' ? 104 : 95, source: '轨道类型推断' };
   }
-  if (/低倾角|星网|千帆|卫星互联网|商业/i.test(text)) return { deg: 100, source: '轨道类型推断' };
+  if (/低倾角|星网|千帆|卫星互联网|商业|low earth|\bleo\b|starlink/i.test(text)) return { deg: 100, source: '轨道类型推断' };
   const bySite = SITE_AZIMUTH[t.site];
   return bySite != null
     ? { deg: bySite, source: '发射场常规推断' }
@@ -4793,6 +4787,7 @@ function drawTrajectories(tasks, group) {
       `<strong>${t.code}</strong>` +
       `<span class="popup-detail">${t.site}</span>` +
       `<span class="popup-detail">${t.label}</span>` +
+      `<span class="popup-detail">发射：${fmtTime(t.launchTime)}${t.isGlobal ? ' · 全球任务（Launch Library 2）' : ''}</span>` +
       dirLine +
       `<span class="popup-detail" style="color:${lineColor}">${t.pathSynthetic ? '航迹中心线（无 NOTAM 落区，按射向推断）' : '航迹中心线（NOTAM 落区推演）'}</span>` +
       `<span class="popup-detail" style="color:${isTwi ? '#1E8449' : '#8a6110'}">${t.twilightDesc}</span>`
@@ -4997,12 +4992,54 @@ launchSites.forEach(site => {
   });
 });
 
-// ISO(UTC) 时间 -> 北京时间字符串
-function fmtBeijing(iso) {
+// ISO(UTC) 时间 -> 自动转换时区（默认跟随访问者本地时区，与北京时间不同时并列显示）
+const USER_TZ = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
+  catch (e) { return 'UTC'; }
+})();
+const TZ_CN = 'Asia/Shanghai';
+const TZ_ALIAS = {
+  'Asia/Shanghai': '北京时间',
+  'Asia/Tokyo': '日本时间',
+  'Asia/Seoul': '首尔时间',
+  'Asia/Singapore': '新加坡时间',
+  'Asia/Kolkata': '印度时间',
+  'Europe/London': '伦敦时间',
+  'Europe/Paris': '巴黎时间',
+  'Europe/Berlin': '柏林时间',
+  'Europe/Moscow': '莫斯科时间',
+  'America/New_York': '美东时间',
+  'America/Chicago': '美中时间',
+  'America/Denver': '美山时间',
+  'America/Los_Angeles': '美西时间',
+  'Australia/Sydney': '悉尼时间',
+  'Pacific/Auckland': '新西兰时间',
+  'UTC': 'UTC',
+  'Etc/UTC': 'UTC',
+};
+
+function tzName(tz) {
+  return TZ_ALIAS[tz] || tz.replace(/_/g, ' ');
+}
+
+function fmtInZone(iso, tz) {
   const d = new Date(iso);
-  const bj = new Date(d.getTime() + 8 * 3600 * 1000);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(bj.getUTCMonth() + 1)}-${p(bj.getUTCDate())} ${p(bj.getUTCHours())}:${p(bj.getUTCMinutes())}`;
+  if (isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: tz, month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d);
+  const get = (type) => (parts.find(p => p.type === type) || {}).value || '';
+  return `${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+}
+
+function fmtTime(iso) {
+  if (USER_TZ === TZ_CN) return `${fmtInZone(iso, TZ_CN)}（北京时间）`;
+  const local = fmtInZone(iso, USER_TZ);
+  const bj = fmtInZone(iso, TZ_CN);
+  // 同一天时省略北京时间的日期，避免卡片换行过长
+  const bjShort = local.slice(0, 5) === bj.slice(0, 5) ? bj.slice(6) : bj;
+  return `${local}（${tzName(USER_TZ)}）· 北京 ${bjShort}`;
 }
 
 // 通用：绘制尾迹云拍摄走廊（仅晨昏任务）
@@ -5065,14 +5102,16 @@ updateSunBand(trajectories);
 
 // 从 /api/prediction 返回的数据动态更新未来任务航迹线
 // 将 next_launch + upcoming 列表转为 trajectories 格式，重绘地图
-function updateTrajectoriesFromPrediction(data) {
-  const items = [];
-  if (data.next_launch && data.next_launch.path) items.push(data.next_launch);
-  if (data.upcoming) {
-    for (const u of data.upcoming) {
-      if (u.path) items.push(u);
-    }
-  }
+let localMissionItems = [];
+let globalMissionItems = [];
+
+function futureGlobalCount() {
+  const now = Date.now();
+  return globalMissionItems.filter(t => new Date(t.launchTime).getTime() >= now).length;
+}
+
+function rebuildFutureTrajectories() {
+  const items = [...localMissionItems, ...globalMissionItems];
   if (!items.length) return;
 
   // 先按 NOTAM 落区确定射向（无落区时按方向描述 / 轨道类型推断），
@@ -5093,7 +5132,6 @@ function updateTrajectoriesFromPrediction(data) {
   // 原地替换 trajectories（保持 const 引用不变）
   trajectories.length = 0;
   trajectories.push(...items);
-  console.log(`[预测] 已加载 ${items.length} 个未来发射任务航迹线`);
 
   // 若当前处于未来任务模式，立即刷新地图、侧栏列表与聚焦下拉
   if (currentMissionMode === 'future') {
@@ -5103,12 +5141,113 @@ function updateTrajectoriesFromPrediction(data) {
     const hint = document.getElementById('missionHint');
     if (hint) {
       const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
+      const globalFuture = futureGlobalCount();
       const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
       hint.textContent = focusedMissionId
         ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
-        : `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+        : `当前：未来发射任务（共 ${n} 个，含 ${globalFuture} 个全球暮光任务）${altSuffix}`;
     }
   }
+}
+
+function updateTrajectoriesFromPrediction(data) {
+  const items = [];
+  if (data.next_launch && data.next_launch.path) items.push(data.next_launch);
+  if (data.upcoming) {
+    for (const u of data.upcoming) {
+      if (u.path) items.push(u);
+    }
+  }
+  if (!items.length) {
+    loadGlobalTwilightTasks();
+    return;
+  }
+
+  localMissionItems = items;
+  rebuildFutureTrajectories();
+  console.log(`[预测] 已加载 ${items.length} 个未来发射任务航迹线`);
+
+  // 接入全球发射任务：只保留发射时刻太阳高度角处于 -13°~0° 的场次
+  loadGlobalTwilightTasks();
+}
+
+/* === 全球发射任务（Launch Library 2） ===
+   只保留未来 120 天（含最近 7 天已发射）内、时间精确到小时以内、
+   且发射时刻发射场太阳高度角处于 -13°~0° 的非中国任务（即满足火箭云条件）。
+   中国任务由 NOTAM 数据源提供，避免重复。 */
+const LL2_URL = 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=50&mode=detailed';
+const LL2_CACHE_KEY = 'hjqy_ll2_twilight_v1';
+const LL2_CACHE_TTL = 6 * 3600e3;
+const LL2_MAX_DAYS = 120;
+const LL2_PAST_DAYS = 7;
+
+function ll2ToTask(r) {
+  const pad = r.pad || {};
+  const lat = Number(pad.latitude), lng = Number(pad.longitude);
+  const net = r.net || r.window_start;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !net) return null;
+  const country = typeof pad.country === 'string' ? pad.country : (pad.country || {}).name || '';
+  if (/china/i.test(country)) return null;  // 中国任务由 NOTAM 数据源覆盖
+  const launch = new Date(net);
+  if (isNaN(launch.getTime())) return null;
+  const days = (launch.getTime() - Date.now()) / 86400000;
+  if (days < -LL2_PAST_DAYS || days > LL2_MAX_DAYS) return null;
+  // 时间精度不足（仅到日/月/年）时无法判断发射时刻太阳高度角
+  if (!/^(Second|Minute|Hour)$/.test((r.net_precision || {}).name || '')) return null;
+  const alt = sunAltitudeAt(lat, lng, launch);
+  if (alt < -13 || alt > 0) return null;
+  const orbit = (r.mission || {}).orbit || {};
+  const rocket = (r.rocket || {}).configuration || {};
+  const provider = (r.launch_service_provider || {}).name || '';
+  const rocketName = rocket.name || '';
+  return {
+    code: r.name,
+    site: (pad.location || {}).name || pad.name || '未知发射场',
+    site_lat: lat,
+    site_lng: lng,
+    label: [rocketName, r.launch_designator].filter(Boolean).join(' · ') || r.name,
+    mission_type: [orbit.name, provider].filter(Boolean).join(' · '),
+    launchTime: launch.toISOString(),
+    window_start: r.window_start || net,
+    window_end: r.window_end || net,
+    path: null,
+    sunAlt: alt,
+    twilight: true,
+    twilightDesc: `${days < 0 ? '已发射 · ' : ''}发射时刻太阳高度角 ${alt.toFixed(1)}° · 处于 -13°~0° 可观测区间`,
+    status: /go/i.test((r.status || {}).abbrev || '') ? 'go' : 'tbd',
+    source: 'Launch Library 2',
+    isGlobal: true,
+  };
+}
+
+async function loadGlobalTwilightTasks() {
+  let items = null;
+  try {
+    const cached = JSON.parse(localStorage.getItem(LL2_CACHE_KEY) || 'null');
+    if (cached && Array.isArray(cached.items) && Date.now() - cached.ts < LL2_CACHE_TTL) {
+      items = cached.items;
+    }
+  } catch (e) { /* 缓存不可用时直接请求 */ }
+
+  if (!items) {
+    try {
+      const resp = await fetch(LL2_URL, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      items = (data.results || []).map(ll2ToTask).filter(Boolean);
+      try {
+        localStorage.setItem(LL2_CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
+      } catch (e) { /* 存储配额不足时跳过缓存 */ }
+    } catch (err) {
+      console.warn('全球发射任务加载失败', err);
+      return;
+    }
+  }
+
+  globalMissionItems = items;
+  rebuildFutureTrajectories();
+  console.log(`[全球] 满足火箭云条件的任务 ${items.length} 个`,
+    items.map(t => `${t.code}@${t.site}(${t.launchTime})`).join(' | '));
 }
 
 // 聚焦/取消聚焦某个任务
@@ -5141,7 +5280,7 @@ function setMissionFocus(code) {
       const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
       mh.textContent = focusedMissionId
         ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
-        : `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+        : `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
     } else {
       const all = filteredHistoryTasks();
       const tw = all.filter(t => t.twilight).length;
@@ -5292,7 +5431,7 @@ function renderFutureList() {
           <span class="morph-badge ${morph.cls}">${morph.name}</span>
         </span>
       </div>
-      <div class="fi-time">${fmtBeijing(t.launchTime)} 发射 · ${t.site}</div>
+      <div class="fi-time">${fmtTime(t.launchTime)} 发射 · ${t.site}</div>
       <div class="hi-meta">${t.label}</div>
       <div class="hi-meta" style="color:var(--accent-soft)">${morph.desc}</div>
     `;
@@ -5509,7 +5648,7 @@ function renderReviewPanel() {
   const twPredicted = historicalTrajectories.filter(t => t.twilight).slice(0, 5);
   const predictedHtml = twPredicted.map(t => `
     <div class="review-item">
-      <div class="rv-head">${t.code} · ${fmtBeijing(t.launchTime)}</div>
+      <div class="rv-head">${t.code} · ${fmtTime(t.launchTime)}</div>
       <div class="rv-body">预测：晨昏可拍 · 太阳高度角 ${t.sunAlt}° · 形态「${predictMorphology(t).name}」</div>
     </div>`).join('');
   const actualHtml = historicalSightings.map(s => `
@@ -5619,7 +5758,7 @@ function switchMission(mode) {
     if (futureBox) futureBox.classList.remove('hidden');
     const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
     const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-    if (hint) hint.textContent = `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+    if (hint) hint.textContent = `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
   } else {
     map.removeLayer(futureMissionGroup);
     applyHistoryFilter();
@@ -5645,7 +5784,7 @@ renderFutureList();
   const hint = document.getElementById('missionHint');
   const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
   const altSuffix = observerAltitude > 0 ? ` · 海拔 ${observerAltitude}m` : '';
-  if (hint) hint.textContent = `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+  if (hint) hint.textContent = `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
 })();
 
 // Windy 卫星云图图层切换
@@ -5698,7 +5837,7 @@ function onAltitudeChange(val) {
       const n = futureTasksWithin(FUTURE_WINDOW_DAYS).length;
       hint.textContent = focusedMissionId
         ? `已聚焦：${focusedMissionId}（再次点击恢复全部 ${n} 个）${altSuffix}`
-        : `当前：未来发射任务（共 ${n} 个任务）${altSuffix}`;
+        : `当前：未来发射任务（共 ${n} 个任务，含 ${futureGlobalCount()} 个全球暮光任务）${altSuffix}`;
     } else {
       const all = filteredHistoryTasks();
       const tw = all.filter(t => t.twilight).length;
@@ -5929,8 +6068,8 @@ function computeShotWindows() {
         <span class="lp-site">${t.code} · ${t.site}</span>
         <span class="score-badge" style="color:${scoreColor}">${score}</span>
       </div>
-      <div class="w-detail">发射 ${fmtBeijing(t.launchTime)} · 方位 ${tgt.bearing.toFixed(0)}° · 仰角 ${el.toFixed(1)}° · 距轨迹 ${Math.round(tgt.distKm)}km</div>
-      ${nearTw ? `<div class="w-detail" style="color:${scoreColor}">暮光窗口 ${fmtBeijing(nearTw.start.toISOString())} → ${fmtBeijing(nearTw.end.toISOString())}</div>` : `<div class="w-detail" style="color:#8a6110">发射时刻附近无暮光窗口 · 白天难拍火箭云</div>`}
+      <div class="w-detail">发射 ${fmtTime(t.launchTime)} · 方位 ${tgt.bearing.toFixed(0)}° · 仰角 ${el.toFixed(1)}° · 距轨迹 ${Math.round(tgt.distKm)}km</div>
+      ${nearTw ? `<div class="w-detail" style="color:${scoreColor}">暮光窗口 ${fmtTime(nearTw.start.toISOString())} → ${fmtTime(nearTw.end.toISOString())}</div>` : `<div class="w-detail" style="color:#8a6110">发射时刻附近无暮光窗口 · 白天难拍火箭云</div>`}
     </div>`;
   }).join('');
   panel.innerHTML = rows;
@@ -6304,7 +6443,7 @@ function makeBand(g, pts, color, angRad, sunMoon) {
       .setContent(`
         <div style="font-size:0.75rem;line-height:1.5;max-width:220px">
           <b>${name}凌轨 · 观测机位</b><br>
-          <span style="color:#888">${fmtBeijing(hit.time.toISOString())}</span><br>
+          <span style="color:#888">${fmtTime(hit.time.toISOString())}</span><br>
           仰角 ${hit.el.toFixed(0)}° · 方位 ${hit.az.toFixed(0)}°<br>
           距轨迹 ${d}km · 火箭高度 ${hit.h.toFixed(0)}km<br>
           圆面角距 ${sepStr}° ${sepOk?'✅ 穿越':'——'}<br>
