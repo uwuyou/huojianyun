@@ -1470,6 +1470,23 @@ h1, h2, h3, h4 {
 
 .morph-badge.morph-none { background: #9A938A; }
 
+/* 追击价值评级（推进剂 × 可观测性） */
+.chase-line {
+  display: flex; align-items: baseline; gap: 0.4rem;
+  margin-top: 0.35rem; font-size: 0.7rem; line-height: 1.55;
+}
+.chase-tag {
+  flex: none;
+  font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.04em;
+  padding: 0.1rem 0.42rem; border-radius: 2px;
+  color: #fff; background: #9A938A;
+}
+.chase-tag.best { background: #1E8449; }
+.chase-tag.good { background: #B9770E; }
+.chase-tag.ok { background: #566573; }
+.chase-tag.no { background: #922B21; }
+.chase-why { color: var(--muted); }
+
 .status-badge {
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -3071,7 +3088,7 @@ h1, h2, h3, h4 {
       <span class="lg-item"><span class="lg-zone" style="background:#27AE60"></span> 7-14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#2980B9"></span> &gt;14天</span>
       <span class="lg-item"><span class="lg-zone" style="background:#9A938A"></span> 已发射</span>
-      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 已接入 Launch Library 2 全球发射任务，默认显示全部获取到的任务，可用侧栏「仅暮光任务」筛选 · 时间自动转换为你的本地时区，与北京时间不同时并列显示</span>
+      <span class="lg-note">射向优先按 NOTAM 落区判定（无落区时按轨道类型与发射场推断）；观测范围只绘制发射窗口内太阳高度角处于 -13°~0° 的区域 · 已接入 Launch Library 2 全球发射任务，默认显示全部获取到的任务，可用侧栏「仅暮光任务」筛选 · 任务卡片与弹道弹窗的「追击价值」按推进剂评估：固体（含铝 APCP）与煤油/液氧尾迹最浓，固体助推次之，常温推进剂偏薄，液氧甲烷偏淡，液氢液氧几乎无烟 · 时间自动转换为你的本地时区，与北京时间不同时并列显示</span>
       <span class="lg-note" style="color:var(--accent-soft)">实时卫星云图已独立为新板块（见下方），支持卫星影像 / 云层 / 降水 / 风场 / 温度多图层切换；右上角图层面板可叠加 NASA MODIS 卫星影像</span>
     </div>
 
@@ -4858,6 +4875,7 @@ function drawTrajectories(tasks, group) {
     });
     group.addLayer(line);
 
+    const chase = chaseVerdict(t);
     line.bindPopup(
       `<strong>${t.code}</strong>` +
       `<span class="popup-detail">${t.site}</span>` +
@@ -4865,7 +4883,8 @@ function drawTrajectories(tasks, group) {
       `<span class="popup-detail">发射：${fmtTime(t.launchTime)}${t.isGlobal ? ' · 全球任务（Launch Library 2）' : ''}</span>` +
       dirLine +
       `<span class="popup-detail" style="color:${lineColor}">${t.pathSynthetic ? '航迹中心线（无 NOTAM 落区，按射向推断）' : '航迹中心线（NOTAM 落区推演）'}</span>` +
-      `<span class="popup-detail" style="color:${isTwi ? '#1E8449' : '#8a6110'}">${t.twilightDesc}</span>`
+      `<span class="popup-detail" style="color:${isTwi ? '#1E8449' : '#8a6110'}">${t.twilightDesc}</span>` +
+      `<span class="popup-detail"><strong>追击价值：</strong>${chase.level} · ${chase.text}</span>`
     );
 
     // 每段中点放置方向箭头
@@ -5516,6 +5535,7 @@ function renderFutureList() {
   }
   tasks.forEach(t => {
     const morph = predictMorphology(t);
+    const chase = chaseVerdict(t);
     const item = document.createElement('div');
     item.className = 'history-item future-item' + (focusedMissionId === t.code ? ' active' : '');
     item.innerHTML = `
@@ -5529,6 +5549,10 @@ function renderFutureList() {
       <div class="fi-time">${fmtTime(t.launchTime)} 发射 · ${t.site}</div>
       <div class="hi-meta">${t.label}</div>
       <div class="hi-meta" style="color:var(--accent-soft)">${morph.desc}</div>
+      <div class="chase-line">
+        <span class="chase-tag ${chase.cls}">${chase.level}</span>
+        <span class="chase-why">${chase.text}</span>
+      </div>
     `;
 
     // 订阅按钮
@@ -5581,6 +5605,67 @@ function predictMorphology(t) {
   if (a <= -12) return { name: '螺旋 / 水母形', cls: '', desc: '太阳高度角很低(-12°以下)，高层尾迹被强光照亮，易形成发光螺旋或水母状云' };
   if (a <= -6) return { name: '发光扇形', cls: '', desc: '晨昏蒙影较深阶段，尾迹扩张成发光扇形云团' };
   return { name: '带状尾迹云', cls: '', desc: '太阳高度角接近地平线，尾迹呈细长带状发光云' };
+}
+
+// ---------- 3.5 推进剂与追击价值 ----------
+/* 尾迹亮度主要由推进剂决定（按公开资料整理）：
+     · 固体推进剂（含铝 APCP）：燃烧产生大量氧化铝颗粒，尾迹最浓最白、存留最久；
+     · 煤油/液氧：碳烟与水汽混合，尾迹浓密、层次分明（如联盟号 RP-1/LOX，尾迹可持续数分钟）；
+     · 固体助推 + 液体芯级：助推器提供浓密白烟，整体接近煤油级；
+     · 常温推进剂（偏二甲肼/四氧化二氮）：水汽与氮氧化物，尾迹偏黄褐、较薄；
+     · 液氧甲烷：几乎无碳烟，以水汽为主，尾迹偏淡；
+     · 液氢液氧：几乎无烟，尾迹近乎透明，只在高空形成淡薄冰晶云。 */
+/* 推进剂表按需初始化（页面初次渲染早于本段常量求值，用 var 缓存避免 TDZ） */
+var PROP_CACHE = null;
+
+function propTables() {
+  if (PROP_CACHE) return PROP_CACHE;
+  PROP_CACHE = {
+    props: {
+      solid:      { name: '固体推进剂', score: 10, note: '含铝 APCP 产生大量氧化铝颗粒，尾迹最浓最白、存留最久' },
+      kerolox:    { name: '煤油/液氧', score: 9, note: '碳烟与水汽混合，尾迹浓密、层次分明' },
+      srb:        { name: '固体助推 + 液体芯级', score: 9, note: '助推器喷出浓密白烟，尾迹规模大' },
+      hypergolic: { name: '常温推进剂', score: 7, note: '偏二甲肼/四氧化二氮，水汽与氮氧化物，尾迹偏黄褐、较薄' },
+      methalox:   { name: '液氧甲烷', score: 6, note: '几乎无碳烟，以水汽为主，尾迹偏淡' },
+      hydrolox:   { name: '液氢液氧', score: 4, note: '几乎无烟，尾迹近乎透明，只在高空形成淡薄冰晶云' },
+      unknown:    { name: '推进剂未知', score: 5, note: '暂无该型号推进剂资料，按中等估计' },
+    },
+    rules: [
+      { key: 'solid', re: /长征\s*十一|Long March 11|快舟|Kuaizhou|捷龙|Smart Dragon|力箭|Lijian|Kinetica|谷神星|Ceres-?\s*1|双曲线|Hyperbola|引力一号|Gravity-?\s*1|Minotaur|Pegasus|Vega|Epsilon|SSLV|固体/i },
+      { key: 'kerolox', re: /长征\s*十(?!一)|Long March 10|长征\s*十二|Long March 12|长征\s*(五|六|七|八|九)|Long March (5|6|7|8|9)|天龙|Tianlong|Falcon|Soyuz|Electron|Angara|Firefly|LauncherOne|Antares|煤油|Kerosene|RP-?1/i },
+      { key: 'srb', re: /Ariane|Vulcan|Atlas|H-?II|H3|GSLV|PSLV|LVM-?3|固体助推/i },
+      { key: 'methalox', re: /朱雀|Zhuque|Starship|New Glenn|Neutron|Terran|甲烷|Methane/i },
+      { key: 'hydrolox', re: /Delta IV|液氢|Hydrogen|LH2|氢氧/i },
+      { key: 'hypergolic', re: /长征|Long March|CZ-|Proton|质子|偏二甲肼|UDMH|常温/i },
+    ]
+  };
+  return PROP_CACHE;
+}
+
+function rocketPropellant(t) {
+  const text = `${t.code || ''} ${t.label || ''} ${t.mission_type || ''}`;
+  const { props, rules } = propTables();
+  for (const rule of rules) {
+    if (rule.re.test(text)) return props[rule.key];
+  }
+  return props.unknown;
+}
+
+/* 追击价值 = 推进剂尾迹质量 × 可观测性（太阳高度角越接近 -6°~-13°，对比度越好） */
+function chaseVerdict(t) {
+  const prop = rocketPropellant(t);
+  if (!t.twilight) {
+    return { cls: 'no', level: '不值得专程', prop,
+      text: '该时段看不到火箭云，与推进剂无关，不必专程' };
+  }
+  const a = Number.isFinite(t.sunAlt) ? t.sunAlt : -8;
+  const factor = a <= -6 ? 1 : (a <= 0 ? 0.88 : 0.78);
+  const score = prop.score * factor;
+  const text = `${prop.name} ${prop.score}/10 · ${prop.note}`;
+  if (score >= 8.4) return { cls: 'best', level: '强烈推荐', prop, score, text };
+  if (score >= 7) return { cls: 'good', level: '值得专程', prop, score, text };
+  if (score >= 5.5) return { cls: 'ok', level: '顺路可看', prop, score, text };
+  return { cls: 'no', level: '不必专程', prop, score, text };
 }
 
 // ---------- 1. 天气 / 云量叠加 ----------
