@@ -4056,18 +4056,46 @@ function refreshTwilight() {
 }
 setInterval(refreshTwilight, 600000);
 
-/* === 可观测带：裁切到该次任务的可见范围 ===
-   火箭云要求地面已进入暮光（太阳在地平线下），而 80 km 高度的尾迹仍被阳光照亮。
-   -13°~0° 的可观测带本身是围绕子太阳点的整圈环带，几乎覆盖大半个地球，与单次任务无关；
-   这里只保留发射场周边 BAND_VISIBLE_KM（约 950 km，即 80~100 km 高度尾迹的地平距离）
-   以内的部分：
+/* === 可观测带：按该次火箭最高飞行高度裁切 ===
+   火箭云要求地面已进入暮光（太阳在地平线下），而高空尾迹仍被阳光照亮。
+   -13°~0° 的可观测带本身是围绕子太阳点的整圈环带，几乎覆盖大半个地球；
+   单次任务能看到的部分受视距限制：观测者在地面，尾迹最高点在 h 高度，
+   地平距离 d = √(2Rh)（R=6371 km，含 8% 大气折射）。
+   h 取「当次火箭的最高飞行高度」，而不是固定 950 km——不同任务视距差别很大。
+   带内再按太阳高度角分色：
        -13°~-6° 天空较暗，尾迹明亮清晰（绿）
         -6°~0°  天空较亮，对比度较低（红）
    区域按发射窗口内各时刻取并集，再用等值线提取矢量多边形，任意缩放都平滑。 */
 const BAND_COS_13 = Math.cos(103 * Math.PI / 180); // 太阳高度角 -13°
 const BAND_COS_6 = Math.cos(96 * Math.PI / 180);   // 太阳高度角 -6°
-const BAND_VISIBLE_KM = 950;
 const BAND_KM_DEG = 111.195;
+
+/* 当次任务的最高飞行高度（km，公开资料近似值）：
+   先看任务描述里的轨道类型（太阳同步 600~800 km、GTO 停泊轨道 200 余 km、
+   载人/空间站 400 km、星链 550 km），再按火箭型号兜底。 */
+const BAND_PEAK_RULES = [
+  { re: /太阳同步|极轨|polar|sun-?synchronous|\bsso\b/i, alt: 700 },
+  { re: /高轨|\bgto\b|\bgeo\b|geostationary|geosynchronous|地球同步|中轨|\bmeo\b/i, alt: 220 },
+  { re: /载人|神舟|空间站|crew|human|\biss\b/i, alt: 400 },
+  { re: /星链|starlink|卫星互联网|星网|千帆|低轨|\bleo\b|低倾角/i, alt: 550 },
+  { re: /长征\s*(四|六|八)|Long March (4|6|8)|CZ-?(4|6|8)/i, alt: 700 },
+  { re: /长征|Long March|CZ-/i, alt: 300 },
+  { re: /快舟|捷龙|力箭|谷神星|双曲线|引力|固体|Kuaizhou|Smart Dragon|Lijian|Ceres|Hyperbola|Gravity|Electron|Minotaur|Pegasus/i, alt: 500 },
+  { re: /Falcon|Starship|星舰|New Glenn|Neutron|Terran/i, alt: 550 },
+  { re: /Soyuz|联盟|Ariane|Vulcan|Atlas|H-?3|GSLV|PSLV|LVM/i, alt: 400 },
+];
+const BAND_PEAK_DEFAULT_KM = 300;
+
+function rocketPeakAltKm(t) {
+  const text = `${t.code || ''} ${t.label || ''} ${t.mission_type || ''} ${t.missionType || ''}`;
+  for (const r of BAND_PEAK_RULES) if (r.re.test(text)) return r.alt;
+  return BAND_PEAK_DEFAULT_KM;
+}
+
+// 观测者在地面时，高度 h 处尾迹的地平距离（km）
+function bandRadiusKm(t) {
+  return Math.sqrt(2 * 6371 * rocketPeakAltKm(t)) * 1.08;
+}
 let sunBandLayer = L.layerGroup().addTo(map);
 let sunBandKey = '';
 let lastBandGeom = { red: [], green: [] };
@@ -4135,12 +4163,12 @@ function missionTimes(t) {
 }
 
 // 在发射场周边逐格采样可观测带遮罩（1 = 红带，2 = 绿带，0 = 无）
-function bandFieldGrid(times, site, N) {
+function bandFieldGrid(times, site, radiusKm, N) {
   const RAD = Math.PI / 180;
-  const dLat = (BAND_VISIBLE_KM / BAND_KM_DEG) * 1.12; // 留边，避免轮廓落在网格边界上
+  const dLat = (radiusKm / BAND_KM_DEG) * 1.12; // 留边，避免轮廓落在网格边界上
   const cosLat = Math.max(0.15, Math.cos(site[0] * RAD));
   const dLon = dLat / cosLat;
-  const latA = site[0] - dLat, latB = site[0] + dLat;
+  const latA = Math.max(-89, site[0] - dLat), latB = Math.min(89, site[0] + dLat);
   const lonA = site[1] - dLon, lonB = site[1] + dLon;
   const S = N + 1;
   const red = new Float32Array(S * S), green = new Float32Array(S * S);
@@ -4148,15 +4176,16 @@ function bandFieldGrid(times, site, N) {
     const sp = subsolarPoint(d);
     return { lon: sp.lon, sinδ: Math.sin(sp.lat * RAD), cosδ: Math.cos(sp.lat * RAD) };
   });
-  const kx = BAND_KM_DEG * cosLat, r2 = BAND_VISIBLE_KM * BAND_VISIBLE_KM;
+  // 用球面余弦判断是否落在地平视距内（比平面近似更准，跨高纬时不会变形）
+  const sinφ0 = Math.sin(site[0] * RAD), cosφ0 = Math.cos(site[0] * RAD);
+  const cosR = Math.cos(Math.min(Math.PI, radiusKm / 6371));
   for (let j = 0; j <= N; j++) {
     const lat = latA + (latB - latA) * j / N;
     const φ = lat * RAD, sinφ = Math.sin(φ), cosφ = Math.cos(φ);
-    const dy = (lat - site[0]) * BAND_KM_DEG;
     for (let i = 0; i <= N; i++) {
       const lon = lonA + (lonB - lonA) * i / N;
-      const dx = (lon - site[1]) * kx;
-      if (dx * dx + dy * dy > r2) continue; // 超出该次任务的可见范围
+      const cosD = sinφ * sinφ0 + cosφ * cosφ0 * Math.cos((lon - site[1]) * RAD);
+      if (cosD < cosR) continue; // 超出该次任务的可见范围
       let dark = false, lit = false;
       for (let k = 0; k < subs.length; k++) {
         const cosZ = sinφ * subs[k].sinδ + cosφ * subs[k].cosδ * Math.cos((lon - subs[k].lon) * RAD);
@@ -4267,9 +4296,9 @@ function groupRings(rings) {
 }
 
 // 生成该次任务可见范围内可观测带的经纬度多边形（含洞）
-function bandGeometry(times, site, N = 720) {
+function bandGeometry(times, site, radiusKm, N = 720) {
   if (!times.length || !site) return { red: [], green: [] };
-  const g = bandFieldGrid(times, site, N);
+  const g = bandFieldGrid(times, site, radiusKm, N);
   // 跨 ±180° 时整体平移，保证多边形连续
   const shift = g.lonA < -180 ? 360 : (g.lonB > 180 ? -360 : 0);
   const toLatLng = (rings) => groupRings(rings).map((set) => set.map((ring) => ring.map(([i, j]) => [
@@ -4283,7 +4312,7 @@ function bandGeometry(times, site, N = 720) {
 }
 
 // 找到可观测带内距发射场最近的点（用于自动缩放与距离提示）
-function nearestBandPoint(times, site) {
+function nearestBandPoint(times, site, radiusKm) {
   if (!site || !times.length) return null;
   const RAD = Math.PI / 180;
   const subs = times.map((d) => {
@@ -4302,6 +4331,7 @@ function nearestBandPoint(times, site) {
       }
       if (!hit) continue;
       const d = haversineKm(site, [lat, lon]);
+      if (d > radiusKm) continue; // 超出该次任务的可见范围
       if (d < bestD) { bestD = d; best = [lat, lon]; }
     }
   }
@@ -4326,7 +4356,7 @@ function updateSunBand(tasks) {
     if (bctl) bctl.style.display = 'none';
     return;
   }
-  lastBandGeom = bandGeometry(missionTimes(target), site);
+  lastBandGeom = bandGeometry(missionTimes(target), site, bandRadiusKm(target));
   const style = {
     red: { color: '#C0392B', fillColor: '#C0392B' },
     green: { color: '#27AE60', fillColor: '#27AE60' }
@@ -4343,7 +4373,7 @@ function updateSunBand(tasks) {
 }
 
 /* === 可观测带导出为 KML / KMZ ===
-   导出与地图上完全一致的几何：发射场周边 BAND_VISIBLE_KM 内的
+   导出与地图上完全一致的几何：发射场周边「当次火箭最高高度对应的地平距离」内的
    「太阳高度角 -13°~0°」区域（红带 -6°~0°、绿带 -13°~-6°）。
    供 Google Earth / 奥维 / 图新地球等打开。 */
 let lastBandTarget = null;
@@ -4376,9 +4406,10 @@ function bandKmlPlacemarks(geom) {
 function buildBandKml(target) {
   const t = target || lastBandTarget || null;
   if (!t) return '';
+  const radius = Math.round(bandRadiusKm(t));
   const geom = t === lastBandTarget && (lastBandGeom.red.length || lastBandGeom.green.length)
     ? lastBandGeom
-    : bandGeometry(missionTimes(t), siteCoordsOf(t));
+    : bandGeometry(missionTimes(t), siteCoordsOf(t), bandRadiusKm(t));
   if (!geom.red.length && !geom.green.length) return '';
   const sp = subsolarPoint(new Date(t.launchTime || t.est_t0 || t.window_start));
   const when = fmtTime(t.launchTime);
@@ -4387,7 +4418,7 @@ function buildBandKml(target) {
     '<kml xmlns="http://www.opengis.net/kml/2.2">',
     '<Document>',
     `  <name>${escHtml(`火箭云可观测带 · ${t.code}`)}</name>`,
-    `  <description>${escHtml(`发射时刻 ${when}${sp ? ` · 子太阳点 ${sp.lat.toFixed(1)}°,${sp.lon.toFixed(1)}°` : ''} · 发射场周边 ${BAND_VISIBLE_KM} km 内太阳高度角 -13°~0° 的可观测范围（红带 -6°~0°，绿带 -13°~-6°）`)}</description>`,
+    `  <description>${escHtml(`发射时刻 ${when}${sp ? ` · 子太阳点 ${sp.lat.toFixed(1)}°,${sp.lon.toFixed(1)}°` : ''} · 该次火箭最高飞行 ${Math.round(rocketPeakAltKm(t))} km，发射场周边 ${radius} km 视距内太阳高度角 -13°~0° 的可观测范围（红带 -6°~0°，绿带 -13°~-6°）`)}</description>`,
     '  <Style id="red"><LineStyle><color>ff2b39c0</color><width>2</width></LineStyle><PolyStyle><color>642b39c0</color></PolyStyle></Style>',
     '  <Style id="green"><LineStyle><color>ff60ae27</color><width>2</width></LineStyle><PolyStyle><color>6460ae27</color></PolyStyle></Style>',
     '  <Folder><name>可观测带</name>',
@@ -5637,7 +5668,7 @@ function focusMapToTask(t) {
     bounds.extend(offsetPoint(site.coords, 270, 300));
     // 晨昏任务：视野同时覆盖最近的可观测带
     if (t.twilight) {
-      const near = nearestBandPoint(missionTimes(t), site.coords);
+      const near = nearestBandPoint(missionTimes(t), site.coords, bandRadiusKm(t));
       if (near) bounds.extend(near);
     }
   }
