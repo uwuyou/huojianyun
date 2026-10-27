@@ -4056,19 +4056,21 @@ function refreshTwilight() {
 }
 setInterval(refreshTwilight, 600000);
 
-/* === 太阳高度角 -13°~0° 可观测范围 ===
+/* === 可观测带：裁切到该次任务的可见范围 ===
    火箭云要求地面已进入暮光（太阳在地平线下），而 80 km 高度的尾迹仍被阳光照亮。
-   因此二维地图不再绘制整圈“观测范围”，只绘制发射窗口内太阳高度角处于
-   -13°~0° 的区域：
+   -13°~0° 的可观测带本身是围绕子太阳点的整圈环带，几乎覆盖大半个地球，与单次任务无关；
+   这里只保留发射场周边 BAND_VISIBLE_KM（约 950 km，即 80~100 km 高度尾迹的地平距离）
+   以内的部分：
        -13°~-6° 天空较暗，尾迹明亮清晰（绿）
         -6°~0°  天空较亮，对比度较低（红）
-   该区域按发射时刻计算，时间窗内取并集；图像按 Web 墨卡托投影逐像素生成，
-   与底图瓦片严格对齐。 */
-const BAND_BOUNDS = [[-85.0511, -180], [85.0511, 180]];
+   区域按发射窗口内各时刻取并集，再用等值线提取矢量多边形，任意缩放都平滑。 */
 const BAND_COS_13 = Math.cos(103 * Math.PI / 180); // 太阳高度角 -13°
 const BAND_COS_6 = Math.cos(96 * Math.PI / 180);   // 太阳高度角 -6°
+const BAND_VISIBLE_KM = 950;
+const BAND_KM_DEG = 111.195;
 let sunBandLayer = L.layerGroup().addTo(map);
 let sunBandKey = '';
+let lastBandGeom = { red: [], green: [] };
 
 function sunAltitudeAt(lat, lon, date) {
   const sp = subsolarPoint(date);
@@ -4132,38 +4134,152 @@ function missionTimes(t) {
   return [new Date(base.getTime() - 10 * 60000), base, new Date(base.getTime() + 10 * 60000)];
 }
 
-function buildSunBandCanvas(times) {
-  const W = 1024, H = 512, RAD = Math.PI / 180;
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const ctx = cv.getContext('2d');
-  const img = ctx.createImageData(W, H);
-  const data = img.data;
+// 在发射场周边逐格采样可观测带遮罩（1 = 红带，2 = 绿带，0 = 无）
+function bandFieldGrid(times, site, N) {
+  const RAD = Math.PI / 180;
+  const dLat = (BAND_VISIBLE_KM / BAND_KM_DEG) * 1.12; // 留边，避免轮廓落在网格边界上
+  const cosLat = Math.max(0.15, Math.cos(site[0] * RAD));
+  const dLon = dLat / cosLat;
+  const latA = site[0] - dLat, latB = site[0] + dLat;
+  const lonA = site[1] - dLon, lonB = site[1] + dLon;
+  const S = N + 1;
+  const red = new Float32Array(S * S), green = new Float32Array(S * S);
   const subs = times.map((d) => {
     const sp = subsolarPoint(d);
     return { lon: sp.lon, sinδ: Math.sin(sp.lat * RAD), cosδ: Math.cos(sp.lat * RAD) };
   });
-  for (let r = 0; r < H; r++) {
-    // 墨卡托行 → 纬度
-    const my = Math.PI * (1 - 2 * (r + 0.5) / H);
-    const lat = Math.atan(Math.sinh(my)) / RAD;
-    const sinφ = Math.sin(lat * RAD), cosφ = Math.cos(lat * RAD);
-    for (let c = 0; c < W; c++) {
-      const lon = -180 + 360 * (c + 0.5) / W;
+  const kx = BAND_KM_DEG * cosLat, r2 = BAND_VISIBLE_KM * BAND_VISIBLE_KM;
+  for (let j = 0; j <= N; j++) {
+    const lat = latA + (latB - latA) * j / N;
+    const φ = lat * RAD, sinφ = Math.sin(φ), cosφ = Math.cos(φ);
+    const dy = (lat - site[0]) * BAND_KM_DEG;
+    for (let i = 0; i <= N; i++) {
+      const lon = lonA + (lonB - lonA) * i / N;
+      const dx = (lon - site[1]) * kx;
+      if (dx * dx + dy * dy > r2) continue; // 超出该次任务的可见范围
       let dark = false, lit = false;
       for (let k = 0; k < subs.length; k++) {
-        const cosZ = sinφ * subs[k].sinδ
-          + cosφ * subs[k].cosδ * Math.cos((lon - subs[k].lon) * RAD);
-        if (cosZ <= 0 && cosZ >= BAND_COS_6) { lit = true; }
+        const cosZ = sinφ * subs[k].sinδ + cosφ * subs[k].cosδ * Math.cos((lon - subs[k].lon) * RAD);
+        if (cosZ <= 0 && cosZ >= BAND_COS_6) lit = true;
         else if (cosZ < BAND_COS_6 && cosZ >= BAND_COS_13) { dark = true; break; }
       }
-      const i = (r * W + c) * 4;
-      if (dark) { data[i] = 39; data[i + 1] = 174; data[i + 2] = 96; data[i + 3] = 92; }
-      else if (lit) { data[i] = 192; data[i + 1] = 57; data[i + 2] = 43; data[i + 3] = 78; }
+      const at = j * S + i;
+      if (lit) red[at] = 1; else if (dark) green[at] = 1;
     }
   }
-  ctx.putImageData(img, 0, 0);
-  return cv;
+  return { N, S, latA, latB, lonA, lonB, red, green };
+}
+
+// 等值线提取（marching squares），返回网格坐标下的闭合环
+function contourRings(field, N) {
+  const S = N + 1, segs = [];
+  const cross = (i, j, i2, j2) => {
+    const a = field[j * S + i], b = field[j2 * S + i2];
+    const t = (0.5 - a) / ((b - a) || 1e-6);
+    return [i + (i2 - i) * t, j + (j2 - j) * t];
+  };
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      let c = 0;
+      if (field[j * S + i] > 0.5) c |= 1;
+      if (field[j * S + i + 1] > 0.5) c |= 2;
+      if (field[(j + 1) * S + i + 1] > 0.5) c |= 4;
+      if (field[(j + 1) * S + i] > 0.5) c |= 8;
+      if (!c || c === 15) continue;
+      const e0 = () => cross(i, j, i + 1, j);           // 下边
+      const e1 = () => cross(i + 1, j, i + 1, j + 1);   // 右边
+      const e2 = () => cross(i + 1, j + 1, i, j + 1);   // 上边
+      const e3 = () => cross(i, j + 1, i, j);           // 左边
+      switch (c) {
+        case 1: case 14: segs.push([e3(), e0()]); break;
+        case 2: case 13: segs.push([e0(), e1()]); break;
+        case 3: case 12: segs.push([e3(), e1()]); break;
+        case 4: case 11: segs.push([e1(), e2()]); break;
+        case 5: segs.push([e3(), e0()], [e1(), e2()]); break;
+        case 6: case 9: segs.push([e0(), e2()]); break;
+        case 7: case 8: segs.push([e2(), e3()]); break;
+        case 10: segs.push([e0(), e1()], [e2(), e3()]); break;
+      }
+    }
+  }
+  const key = (p) => `${Math.round(p[0] * 256)}:${Math.round(p[1] * 256)}`;
+  const ends = new Map();
+  segs.forEach((s, idx) => [0, 1].forEach((end) => {
+    const k = key(s[end]);
+    if (!ends.has(k)) ends.set(k, []);
+    ends.get(k).push({ idx, end });
+  }));
+  const used = new Uint8Array(segs.length), rings = [];
+  for (let s = 0; s < segs.length; s++) {
+    if (used[s]) continue;
+    const ring = [], start = key(segs[s][0]);
+    let cur = s, at = 0;
+    for (;;) {
+      used[cur] = 1;
+      const seg = segs[cur], a = seg[at], b = seg[1 - at];
+      ring.push(a);
+      const kb = key(b);
+      if (kb === start) break;
+      let next = null;
+      for (const o of ends.get(kb) || []) if (!used[o.idx]) { next = o; break; }
+      if (!next) { ring.push(b); break; }
+      cur = next.idx; at = next.end;
+    }
+    if (ring.length >= 3 && Math.abs(ringArea(ring)) > 4) rings.push(ring); // 过滤鞍点产生的碎屑
+  }
+  return rings;
+}
+
+function ringArea(r) {
+  let a = 0;
+  for (let i = 0, n = r.length; i < n; i++) {
+    const p = r[i], q = r[(i + 1) % n];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return a / 2;
+}
+function pointInRing(pt, r) {
+  let inside = false;
+  for (let i = 0, n = r.length, j = n - 1; i < n; j = i++) {
+    const xi = r[i][0], yi = r[i][1], xj = r[j][0], yj = r[j][1];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// 按嵌套深度区分外环与洞：深度为偶数的是外环
+function groupRings(rings) {
+  const items = rings.map((r) => {
+    const area = ringArea(r);
+    return { r: area < 0 ? r.slice().reverse() : r, area: Math.abs(area), holes: [] };
+  });
+  items.forEach((it) => {
+    it.depth = items.filter((o) => o !== it && pointInRing(it.r[0], o.r)).length;
+  });
+  const outers = items.filter((it) => it.depth % 2 === 0);
+  items.filter((it) => it.depth % 2 === 1).forEach((h) => {
+    let best = null;
+    for (const o of outers) {
+      if (pointInRing(h.r[0], o.r) && (!best || o.area < best.area)) best = o;
+    }
+    if (best) best.holes.push(h.r);
+  });
+  return outers.map((o) => [o.r, ...o.holes]);
+}
+
+// 生成该次任务可见范围内可观测带的经纬度多边形（含洞）
+function bandGeometry(times, site, N = 720) {
+  if (!times.length || !site) return { red: [], green: [] };
+  const g = bandFieldGrid(times, site, N);
+  // 跨 ±180° 时整体平移，保证多边形连续
+  const shift = g.lonA < -180 ? 360 : (g.lonB > 180 ? -360 : 0);
+  const toLatLng = (rings) => groupRings(rings).map((set) => set.map((ring) => ring.map(([i, j]) => [
+    g.latA + (g.latB - g.latA) * (j / g.N),
+    g.lonA + (g.lonB - g.lonA) * (i / g.N) + shift
+  ])));
+  return {
+    red: toLatLng(contourRings(g.red, g.N)),
+    green: toLatLng(contourRings(g.green, g.N))
+  };
 }
 
 // 找到可观测带内距发射场最近的点（用于自动缩放与距离提示）
@@ -4203,55 +4319,67 @@ function updateSunBand(tasks) {
   sunBandKey = key;
   lastBandTarget = target || null;
   sunBandLayer.clearLayers();
+  lastBandGeom = { red: [], green: [] };
   const bctl = document.getElementById('bandExport');
-  if (bctl) bctl.style.display = target ? '' : 'none';
-  if (!target) return;
-  const times = missionTimes(target);
-  const canvas = buildSunBandCanvas(times);
-  L.imageOverlay(canvas.toDataURL('image/png'), BAND_BOUNDS, {
-    opacity: 1, interactive: false, pane: 'overlayPane',
-  }).addTo(sunBandLayer);
+  const site = target ? siteCoordsOf(target) : null;
+  if (!target || !site) {
+    if (bctl) bctl.style.display = 'none';
+    return;
+  }
+  lastBandGeom = bandGeometry(missionTimes(target), site);
+  const style = {
+    red: { color: '#C0392B', fillColor: '#C0392B' },
+    green: { color: '#27AE60', fillColor: '#27AE60' }
+  };
+  let count = 0;
+  for (const k of ['red', 'green']) {
+    for (const set of lastBandGeom[k]) {
+      L.polygon(set, { ...style[k], weight: 1, opacity: .85, fillOpacity: .3, interactive: false })
+        .addTo(sunBandLayer);
+      count++;
+    }
+  }
+  if (bctl) bctl.style.display = count ? '' : 'none';
 }
 
 /* === 可观测带导出为 KML / KMZ ===
-   把当前「太阳高度角 -13°~0°」可观测带导出为矢量多边形：
-   · 红带 = -6°~0°   · 绿带 = -13°~-6°
-   带为围绕发射时刻子太阳点的环形区域，供 Google Earth / 奥维 / 图新地球等打开。 */
+   导出与地图上完全一致的几何：发射场周边 BAND_VISIBLE_KM 内的
+   「太阳高度角 -13°~0°」区域（红带 -6°~0°、绿带 -13°~-6°）。
+   供 Google Earth / 奥维 / 图新地球等打开。 */
 let lastBandTarget = null;
-const BAND_D2R = Math.PI / 180;
 
-function bandRing(lat, lon, colatDeg, steps = 240) {
-  const c = colatDeg * BAND_D2R, p1 = lat * BAND_D2R, l1 = lon * BAND_D2R;
-  const pts = [];
-  for (let i = 0; i <= steps; i++) {
-    const b = (i / steps) * 2 * Math.PI;
-    const sinP2 = Math.sin(p1) * Math.cos(c) + Math.cos(p1) * Math.sin(c) * Math.cos(b);
-    const p2 = Math.asin(Math.max(-1, Math.min(1, sinP2)));
-    const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(c) * Math.cos(p1), Math.cos(c) - Math.sin(p1) * Math.sin(p2));
-    pts.push(`${normDeg(l2 / BAND_D2R).toFixed(5)},${(p2 / BAND_D2R).toFixed(5)},0`);
-  }
-  return pts;
-}
-
-function bandPolygonKml(name, desc, outerColat, innerColat, fillColor, lineColor, lat, lon, islandColat) {
-  const lines = [];
-  lines.push(`    <Placemark><name>${name}</name>`);
-  lines.push(`      <description>${desc}</description>`);
-  lines.push(`      <styleUrl>#${islandColat ? 'green' : 'red'}</styleUrl>`);
-  lines.push('      <Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>');
-  lines.push('        <outerBoundaryIs><LinearRing><coordinates>');
-  lines.push(bandRing(lat, lon, outerColat).join(' '));
-  lines.push('        </coordinates></LinearRing></outerBoundaryIs>');
-  lines.push('        <innerBoundaryIs><LinearRing><coordinates>');
-  lines.push(bandRing(lat, lon, innerColat).join(' '));
-  lines.push('        </coordinates></LinearRing></innerBoundaryIs>');
-  lines.push('      </Polygon></Placemark>');
-  return lines.join('\n');
+function bandKmlPlacemarks(geom) {
+  const coords = (ring) => ring.map((p) => `${p[1].toFixed(5)},${p[0].toFixed(5)},0`).join(' ');
+  const out = [];
+  const add = (name, desc, style, sets) => {
+    for (const set of sets) {
+      const lines = [
+        '    <Placemark>',
+        `      <name>${escHtml(name)}</name>`,
+        `      <description>${escHtml(desc)}</description>`,
+        `      <styleUrl>#${style}</styleUrl>`,
+        '      <Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>',
+        `        <outerBoundaryIs><LinearRing><coordinates>${coords(set[0])}</coordinates></LinearRing></outerBoundaryIs>`
+      ];
+      for (const hole of set.slice(1)) {
+        lines.push(`        <innerBoundaryIs><LinearRing><coordinates>${coords(hole)}</coordinates></LinearRing></innerBoundaryIs>`);
+      }
+      lines.push('      </Polygon></Placemark>');
+      out.push(lines.join('\n'));
+    }
+  };
+  add('红带 · 太阳高度角 -6°~0°（天空较亮）', '红带 · 天空较亮，对比度较低', 'red', geom.red);
+  add('绿带 · 太阳高度角 -13°~-6°（天空较暗）', '绿带 · 天空较暗，尾迹清晰', 'green', geom.green);
+  return out.join('\n');
 }
 
 function buildBandKml(target) {
   const t = target || lastBandTarget || null;
   if (!t) return '';
+  const geom = t === lastBandTarget && (lastBandGeom.red.length || lastBandGeom.green.length)
+    ? lastBandGeom
+    : bandGeometry(missionTimes(t), siteCoordsOf(t));
+  if (!geom.red.length && !geom.green.length) return '';
   const sp = subsolarPoint(new Date(t.launchTime || t.est_t0 || t.window_start));
   const when = fmtTime(t.launchTime);
   const body = [
@@ -4259,12 +4387,11 @@ function buildBandKml(target) {
     '<kml xmlns="http://www.opengis.net/kml/2.2">',
     '<Document>',
     `  <name>${escHtml(`火箭云可观测带 · ${t.code}`)}</name>`,
-    `  <description>${escHtml(`发射时刻 ${when}${sp ? ` · 子太阳点 ${sp.lat.toFixed(1)}°,${sp.lon.toFixed(1)}°` : ''} · 太阳高度角 -13°~0° 的可观测范围（红带 -6°~0°，绿带 -13°~-6°）`)}</description>`,
+    `  <description>${escHtml(`发射时刻 ${when}${sp ? ` · 子太阳点 ${sp.lat.toFixed(1)}°,${sp.lon.toFixed(1)}°` : ''} · 发射场周边 ${BAND_VISIBLE_KM} km 内太阳高度角 -13°~0° 的可观测范围（红带 -6°~0°，绿带 -13°~-6°）`)}</description>`,
     '  <Style id="red"><LineStyle><color>ff2b39c0</color><width>2</width></LineStyle><PolyStyle><color>642b39c0</color></PolyStyle></Style>',
     '  <Style id="green"><LineStyle><color>ff60ae27</color><width>2</width></LineStyle><PolyStyle><color>6460ae27</color></PolyStyle></Style>',
     '  <Folder><name>可观测带</name>',
-    bandPolygonKml('红带 · 太阳高度角 -6°~0°（天空较亮）', '红带 · 天空较亮，对比度较低', 96, 90, 'red', 'red', sp.lat, sp.lon, false),
-    bandPolygonKml('绿带 · 太阳高度角 -13°~-6°（天空较暗）', '绿带 · 天空较暗，尾迹清晰', 103, 96, 'green', 'green', sp.lat, sp.lon, true),
+    bandKmlPlacemarks(geom),
     '  </Folder>',
     '</Document>',
     '</kml>'
