@@ -85,7 +85,6 @@ body.locked > *:not(#gate):not(script) { display: none !important; }
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   pointer-events: auto;
-  cursor: pointer;
   transition: opacity .3s ease, transform .3s ease;
 }
 .data-stamp .dot {
@@ -3605,9 +3604,7 @@ function renderPrediction(data) {
         : `<span class="unit">T-</span>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     };
     updateNextCountdown();
-    // 重新渲染时先清掉旧计时器，避免重复叠加
-    if (window.__nextCountdownTimer) clearInterval(window.__nextCountdownTimer);
-    window.__nextCountdownTimer = setInterval(updateNextCountdown, 1000);
+    setInterval(updateNextCountdown, 1000);
   }
 
   // 后续发射卡片
@@ -3678,41 +3675,22 @@ const __PREDICTION_SNAPSHOT__ = {
   ]
 };
 
-// 预测数据加载：首次加载 + 每 10 分钟自动检查更新（数据仓库由 Actions 定时抓取）
-let lastPredictionStamp = null;
-
-function loadPredictionData(isFirst) {
-  return fetch(`${DATA_BASE_URL}/prediction.json?t=${Date.now()}`, { cache: 'no-store' })
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(data => {
-      if (!data || !data.next_launch) throw new Error('空数据');
-      const stamp = data.fetched_at || '';
-      // 时间戳未变化时不重复渲染，避免打断聚焦与列表状态
-      if (!isFirst && stamp && stamp === lastPredictionStamp) return;
-      lastPredictionStamp = stamp;
+fetch(`${DATA_BASE_URL}/prediction.json`)
+  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  .then(data => {
+    if (data && data.next_launch) {
       renderPrediction(data);
       // 动态更新未来任务航迹线（从 API 数据构建 trajectories）
       updateTrajectoriesFromPrediction(data);
-    })
-    .catch(err => {
-      if (lastPredictionStamp) {
-        console.warn('预测数据刷新失败，保留当前数据', err);
-        return;
-      }
-      console.warn('预测数据加载失败，使用内嵌快照', err);
-      renderPrediction(__PREDICTION_SNAPSHOT__);
-      loadGlobalTasks();
-    });
-}
-
-loadPredictionData(true);
-setInterval(() => loadPredictionData(false), 10 * 60 * 1000);
-
-// 手动刷新（点击数据角标触发）
-window.__refreshData = function () {
-  loadPredictionData(true);
-  loadGlobalTasks(true);
-};
+    } else {
+      throw new Error('空数据');
+    }
+  })
+  .catch(err => {
+    console.warn('预测数据加载失败，使用内嵌快照', err);
+    renderPrediction(__PREDICTION_SNAPSHOT__);
+    loadGlobalTasks();
+  });
 
 /* ============================================
    MAP
@@ -4223,7 +4201,10 @@ function updateSunBand(tasks) {
   const key = target ? `${target.code}|${target.launchTime}|${focusedMissionId || ''}` : 'none';
   if (key === sunBandKey) return;
   sunBandKey = key;
+  lastBandTarget = target || null;
   sunBandLayer.clearLayers();
+  const bctl = document.getElementById('bandExport');
+  if (bctl) bctl.style.display = target ? '' : 'none';
   if (!target) return;
   const times = missionTimes(target);
   const canvas = buildSunBandCanvas(times);
@@ -4231,6 +4212,129 @@ function updateSunBand(tasks) {
     opacity: 1, interactive: false, pane: 'overlayPane',
   }).addTo(sunBandLayer);
 }
+
+/* === 可观测带导出为 KML / KMZ ===
+   把当前「太阳高度角 -13°~0°」可观测带导出为矢量多边形：
+   · 红带 = -6°~0°   · 绿带 = -13°~-6°
+   带为围绕发射时刻子太阳点的环形区域，供 Google Earth / 奥维 / 图新地球等打开。 */
+let lastBandTarget = null;
+const BAND_D2R = Math.PI / 180;
+
+function bandRing(lat, lon, colatDeg, steps = 240) {
+  const c = colatDeg * BAND_D2R, p1 = lat * BAND_D2R, l1 = lon * BAND_D2R;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const b = (i / steps) * 2 * Math.PI;
+    const sinP2 = Math.sin(p1) * Math.cos(c) + Math.cos(p1) * Math.sin(c) * Math.cos(b);
+    const p2 = Math.asin(Math.max(-1, Math.min(1, sinP2)));
+    const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(c) * Math.cos(p1), Math.cos(c) - Math.sin(p1) * Math.sin(p2));
+    pts.push(`${normDeg(l2 / BAND_D2R).toFixed(5)},${(p2 / BAND_D2R).toFixed(5)},0`);
+  }
+  return pts;
+}
+
+function bandPolygonKml(name, desc, outerColat, innerColat, fillColor, lineColor, lat, lon, islandColat) {
+  const lines = [];
+  lines.push(`    <Placemark><name>${name}</name>`);
+  lines.push(`      <description>${desc}</description>`);
+  lines.push(`      <styleUrl>#${islandColat ? 'green' : 'red'}</styleUrl>`);
+  lines.push('      <Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>');
+  lines.push('        <outerBoundaryIs><LinearRing><coordinates>');
+  lines.push(bandRing(lat, lon, outerColat).join(' '));
+  lines.push('        </coordinates></LinearRing></outerBoundaryIs>');
+  lines.push('        <innerBoundaryIs><LinearRing><coordinates>');
+  lines.push(bandRing(lat, lon, innerColat).join(' '));
+  lines.push('        </coordinates></LinearRing></innerBoundaryIs>');
+  lines.push('      </Polygon></Placemark>');
+  return lines.join('\n');
+}
+
+function buildBandKml(target) {
+  const t = target || lastBandTarget || null;
+  if (!t) return '';
+  const sp = subsolarPoint(new Date(t.launchTime || t.est_t0 || t.window_start));
+  const when = fmtTime(t.launchTime);
+  const body = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<kml xmlns="http://www.opengis.net/kml/2.2">',
+    '<Document>',
+    `  <name>${escHtml(`火箭云可观测带 · ${t.code}`)}</name>`,
+    `  <description>${escHtml(`发射时刻 ${when}${sp ? ` · 子太阳点 ${sp.lat.toFixed(1)}°,${sp.lon.toFixed(1)}°` : ''} · 太阳高度角 -13°~0° 的可观测范围（红带 -6°~0°，绿带 -13°~-6°）`)}</description>`,
+    '  <Style id="red"><LineStyle><color>ff2b39c0</color><width>2</width></LineStyle><PolyStyle><color>642b39c0</color></PolyStyle></Style>',
+    '  <Style id="green"><LineStyle><color>ff60ae27</color><width>2</width></LineStyle><PolyStyle><color>6460ae27</color></PolyStyle></Style>',
+    '  <Folder><name>可观测带</name>',
+    bandPolygonKml('红带 · 太阳高度角 -6°~0°（天空较亮）', '红带 · 天空较亮，对比度较低', 96, 90, 'red', 'red', sp.lat, sp.lon, false),
+    bandPolygonKml('绿带 · 太阳高度角 -13°~-6°（天空较暗）', '绿带 · 天空较暗，尾迹清晰', 103, 96, 'green', 'green', sp.lat, sp.lon, true),
+    '  </Folder>',
+    '</Document>',
+    '</kml>'
+  ];
+  return body.join('\n');
+}
+
+function escHtml(v) { return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// ---- 最小 ZIP 打包（仅存储），生成 KMZ ----
+function crc32bytes(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  return (c ^ 0xffffffff) >>> 0;
+}
+function buildKmzStore(kmlText, filename = 'doc.kml') {
+  const name = new TextEncoder().encode(filename);
+  const data = new TextEncoder().encode(kmlText);
+  const crc = crc32bytes(data);
+  const local = new DataView(new ArrayBuffer(30));
+  local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+  local.setUint16(8, 0, true); local.setUint16(10, 0, true); local.setUint16(12, 0x21, true);
+  local.setUint32(14, crc, true); local.setUint32(18, data.length, true); local.setUint32(22, data.length, true);
+  local.setUint16(26, name.length, true); local.setUint16(28, 0, true);
+  const central = new DataView(new ArrayBuffer(46));
+  central.setUint32(0, 0x02014b50, true); central.setUint16(4, 20, true); central.setUint16(6, 20, true);
+  central.setUint16(8, 0x0800, true); central.setUint16(10, 0, true); central.setUint16(12, 0, true);
+  central.setUint16(14, 0x21, true); central.setUint32(16, crc, true); central.setUint32(20, data.length, true);
+  central.setUint32(24, data.length, true); central.setUint16(28, name.length, true);
+  central.setUint16(30, 0, true); central.setUint16(32, 0, true); central.setUint16(34, 0, true);
+  central.setUint16(36, 0, true); central.setUint32(38, 0, true); central.setUint32(42, 0, true);
+  const localOffset = 30 + name.length, centralOffset = localOffset + data.length;
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(4, 0, true); end.setUint16(6, 0, true);
+  end.setUint16(8, 1, true); end.setUint16(10, 1, true); end.setUint32(12, 46 + name.length, true);
+  end.setUint32(16, centralOffset, true); end.setUint16(20, 0, true);
+  return new Blob([local.buffer, name, data, central.buffer, name, end.buffer], { type: 'application/vnd.google-earth.kmz' });
+}
+
+function downloadBand(target, format) {
+  const t = target || lastBandTarget;
+  if (!t) return;
+  const kml = buildBandKml(t);
+  const base = 'huojianyun-可观测带-' + t.code.replace(/[\\/:*?"<>|\s]+/g, '_');
+  let blob, ext;
+  if (format === 'kmz') { blob = buildKmzStore(kml, 'doc.kml'); ext = 'kmz'; }
+  else { blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }); ext = 'kml'; }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${base}.${ext}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// 可观测带导出控制（左下角）
+const bandExportCtl = L.control({ position: 'bottomleft' });
+bandExportCtl.onAdd = () => {
+  const div = L.DomUtil.create('div', 'band-export');
+  div.id = 'bandExport';
+  div.style.cssText = 'display:none;background:rgba(15,14,12,.9);border:1px solid rgba(245,242,236,.25);border-radius:3px;padding:.28rem .5rem;font-size:.72rem;color:#F5F2EC;';
+  div.innerHTML = '导出可观测带：'
+    + '<button data-fmt="kml" style="margin-left:.3rem">KML</button>'
+    + '<button data-fmt="kmz" style="margin-left:.3rem">KMZ</button>';
+  div.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-fmt]');
+    if (b) downloadBand(lastBandTarget, b.dataset.fmt);
+  });
+  return div;
+};
+bandExportCtl.addTo(map);
 
 /* Leaflet 图层控制面板 */
 const baseMaps = {
@@ -5285,7 +5389,7 @@ function updateTrajectoriesFromPrediction(data) {
    中国任务由 NOTAM 数据源提供，避免重复。 */
 const LL2_URL = 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=50&mode=detailed';
 const LL2_CACHE_KEY = 'hjqy_ll2_tasks_v2';
-const LL2_CACHE_TTL = 1 * 3600e3;  // 1 小时：全球任务变动频繁，缓存不宜过久
+const LL2_CACHE_TTL = 6 * 3600e3;
 const LL2_MAX_DAYS = 120;
 const LL2_PAST_DAYS = 7;
 
@@ -5330,11 +5434,11 @@ function ll2ToTask(r) {
   };
 }
 
-async function loadGlobalTasks(force) {
+async function loadGlobalTasks() {
   let items = null;
   try {
     const cached = JSON.parse(localStorage.getItem(LL2_CACHE_KEY) || 'null');
-    if (!force && cached && Array.isArray(cached.items) && Date.now() - cached.ts < LL2_CACHE_TTL) {
+    if (cached && Array.isArray(cached.items) && Date.now() - cached.ts < LL2_CACHE_TTL) {
       items = cached.items;
     }
   } catch (e) { /* 缓存不可用时直接请求 */ }
@@ -5360,9 +5464,6 @@ async function loadGlobalTasks(force) {
   console.log(`[全球] 已加载 ${items.length} 个任务（其中暮光 ${tw} 个）`,
     items.map(t => `${t.code}@${t.site}(${t.launchTime})`).join(' | '));
 }
-
-// 全球任务每 30 分钟检查一次（缓存 1 小时，过期后才会真正请求）
-setInterval(() => loadGlobalTasks(), 30 * 60 * 1000);
 
 // 聚焦/取消聚焦某个任务
 function setMissionFocus(code) {
@@ -7004,48 +7105,32 @@ window.addEventListener('scroll', () => {
 (function(){
   var stamp = document.getElementById('dataStamp');
   var text = document.getElementById('stampText');
-  var lastOk = false;
   function pad(n){ return String(n).padStart(2, '0'); }
   function fmt(iso){
     var d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
-  function ago(min){
-    if (min < 1) return '刚刚';
-    if (min < 60) return Math.round(min) + ' 分钟前';
-    return (min / 60).toFixed(min < 600 ? 1 : 0) + ' 小时前';
-  }
   function setState(cls, html){
     stamp.className = 'data-stamp' + (cls ? ' ' + cls : '');
     text.innerHTML = html;
     stamp.style.display = 'flex';
   }
-  function refresh(){
-    fetch('https://uwuyou.github.io/huojianyun-data/data/status.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function(s){
-        if (!s || !s.last_success) throw new Error('无时间戳');
-        lastOk = true;
-        var ageMin = (Date.now() - new Date(s.last_success).getTime()) / 60000;
-        // 数据源由 Actions 定时同步，实际间隔 3~5 小时，超过 5 小时才判定为延迟
-        var cls = ageMin > 300 ? 'stale' : '';
-        var src = s.source ? s.source.replace(' NOTAM', '') : '';
-        var extra = (s.upcoming_count != null ? ' · 即将 ' + s.upcoming_count : '');
-        setState(cls, '数据更新 <b>' + fmt(s.last_success) + '</b> · ' + ago(ageMin)
-          + (src ? ' · ' + src : '') + extra + (cls ? ' · 已延迟' : ''));
-      })
-      .catch(function(){
-        if (!lastOk) setState('error', '数据更新 <b>获取失败</b>');
-      });
-  }
-  stamp.title = '点击立即刷新数据';
-  stamp.addEventListener('click', function(){
-    refresh();
-    if (window.__refreshData) window.__refreshData();
-  });
-  refresh();
-  setInterval(refresh, 3 * 60 * 1000);
+  fetch('https://uwuyou.github.io/huojianyun-data/data/status.json', { cache: 'no-store' })
+    .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(s){
+      if (!s || !s.last_success) throw new Error('无时间戳');
+      var t = new Date(s.last_success);
+      var ageMin = (Date.now() - t.getTime()) / 60000;
+      var cls = ageMin > 180 ? 'stale' : '';
+      var src = s.source ? s.source.replace(' NOTAM', '') : '';
+      var extra = (s.upcoming_count != null ? ' · 即将 ' + s.upcoming_count : '');
+      setState(cls, '数据更新 <b>' + fmt(s.last_success) + '</b>' + (src ? ' · ' + src : '') + extra);
+      if (cls) text.innerHTML += ' · 已延迟';
+    })
+    .catch(function(){
+      setState('error', '数据更新 <b>获取失败</b>');
+    });
 })();
 </script>
 
